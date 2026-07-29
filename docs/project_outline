@@ -1,0 +1,917 @@
+You are helping me build a real, deployable MVP called “UW Seat Watch.”
+
+Act as both:
+
+1. A senior backend engineer who writes reliable, maintainable code.
+2. A teacher who explains what we are building and why in plain language.
+
+I know Python reasonably well, but I am still learning backend development, databases, scheduling, HTML parsing, email integrations, deployment, and production design. I do not want you to blindly generate a giant finished project while I understand nothing.
+
+Work in small, testable phases. Before each phase, briefly explain:
+
+- What we are building
+- Why it is needed
+- The important concept I should understand
+- Which files you will create or modify
+
+Then implement the phase, run the relevant tests, show me the results, summarize what changed, and give me one small learning checkpoint.
+
+Do not ask unnecessary questions when a reasonable decision can be made. Do not overengineer the MVP.
+
+After completing Phase 1, stop and let me review it before continuing.
+
+==================================================
+PROJECT GOAL
+==================================================
+
+Build a website where a University of Waterloo student can:
+
+1. Search for a course from Waterloo’s public Schedule of Classes.
+2. View all sections and their enrollment information.
+3. Select a specific section.
+4. Enter their email address.
+5. Confirm the watch through an emailed verification link.
+6. Receive an email when the selected section changes from full to potentially available.
+7. Stop watching through a signed unsubscribe link.
+
+This is a notification service, not an automatic enrollment system.
+
+The site must clearly explain that:
+
+- A displayed opening does not guarantee that the student can enroll.
+- Remaining seats may be reserved for a specific group.
+- Required tutorials, labs, tests, prerequisites, restrictions, or Quest rules may still prevent enrollment.
+- Waterloo’s public data is only updated periodically.
+
+A notification should use language such as:
+
+“Waterloo’s public Schedule of Classes currently shows potential availability in AFM 101 LEC 001. Reserved-seat rules, related components, prerequisites, and Quest eligibility may still prevent enrollment.”
+
+Do not say “You can now enroll.”
+
+==================================================
+KNOWN WATERLOO DATA SOURCE
+==================================================
+
+The public Schedule of Classes does not require authentication.
+
+The course-search form submits a normal HTML form POST request to:
+
+https://classes.uwaterloo.ca/cgi-bin/cgiwrap/infocour/salook.pl
+
+Example request body:
+
+level=under&sess=1269&subject=AFM&cournum=101
+
+The request uses:
+
+Content-Type: application/x-www-form-urlencoded
+
+We do not need Selenium, Playwright, browser automation, login credentials, or a browser extension.
+
+A minimal Python request should be similar to:
+
+response = await client.post(
+    WATERLOO_URL,
+    data={
+        "level": "under",
+        "sess": "1269",
+        "subject": "AFM",
+        "cournum": "101",
+    },
+)
+
+Use a descriptive User-Agent containing the project name and a configurable contact email.
+
+Example:
+
+UWSeatWatch/0.1 (course availability notifier; contact: configured-email)
+
+Use a reasonable timeout, redirect handling, error handling, and limited retries with backoff. Do not aggressively retry a failing Waterloo server.
+
+The response is HTML, not JSON.
+
+The returned table contains columns such as:
+
+- Class
+- Comp Sec
+- Camp Loc
+- Assoc. Class
+- Rel 1
+- Rel 2
+- Enrl Cap
+- Enrl Tot
+- Wait Cap
+- Wait Tot
+- Time Days/Date
+- Bldg Room
+- Instructor
+
+Example section:
+
+Class: 3804
+Comp Sec: LEC 001
+Enrollment Capacity: 70
+Enrollment Total: 49
+Waitlist Capacity: 0
+Waitlist Total: 0
+
+Potential available seats are:
+
+max(enrollment_capacity - enrollment_total, 0)
+
+A section “appears open” when:
+
+enrollment_total < enrollment_capacity
+
+However, reserve rows may appear below a section, such as:
+
+Reserve: Year 1 Math Students
+
+Do not mistake reserve rows, notes, repeated meeting-time rows, or nested table rows for actual sections.
+
+The parser should recognize normal components such as:
+
+- LEC
+- TUT
+- LAB
+- TST
+- SEM
+- DIS
+- PRJ
+- FLD
+
+Use the class number together with the term as the stable identity for a section. A class number by itself may be reused in a different term.
+
+==================================================
+KNOWN EXAMPLE COURSE
+==================================================
+
+The following search was confirmed to work:
+
+Level: under
+Term: 1269
+Subject: AFM
+Course number: 101
+
+The response contained these six actual sections:
+
+- 3804 — LEC 001 — 49 / 70
+- 3234 — LEC 081 — 166 / 200
+- 8340 — LEC 082 — 101 / 200
+- 3840 — TUT 101 — 24 / 35
+- 3841 — TUT 102 — 25 / 35
+- 3806 — TST 201 — 49 / 70
+
+Use a saved copy of the provided AFM 101 HTML as a test fixture. Tests must not repeatedly contact Waterloo.
+
+The HTML uses nested tables. Parse only the direct TD children of each candidate TR when identifying section rows. Otherwise, nested cells may corrupt column positions.
+
+==================================================
+FINAL MVP STACK
+==================================================
+
+Use Python for the entire MVP.
+
+Use:
+
+- Python 3.12+
+- FastAPI
+- Uvicorn
+- Jinja2 server-rendered templates
+- Bootstrap through a CDN or small custom CSS
+- httpx for HTTP requests
+- BeautifulSoup4 for HTML parsing
+- SQLAlchemy 2.x
+- SQLite for local development
+- PostgreSQL-compatible database design for deployment
+- Alembic for migrations if it can be added without excessive complexity
+- APScheduler for scheduled polling
+- itsdangerous or another safe signed-token mechanism
+- Resend for email delivery
+- pytest
+- Docker
+
+Use current stable package versions that are compatible with one another.
+
+Do not use:
+
+- React
+- Next.js
+- Vue
+- Chrome extensions
+- Java
+- Selenium
+- Playwright
+- Redis
+- Celery
+- microservices
+- Kubernetes
+- user passwords
+- a full user-account system
+
+This should be one small FastAPI monolith.
+
+==================================================
+WHY THIS IS A WEBSITE, NOT AN EXTENSION
+==================================================
+
+The frontend is only the user interface for creating and managing watches.
+
+The actual product is the backend process that runs while the user’s browser is closed.
+
+A browser extension is inappropriate because:
+
+- Browsers may be closed.
+- Extension background workers may be suspended.
+- Email-provider secrets cannot safely live in client code.
+- Every user would make separate requests to Waterloo.
+- It would unnecessarily restrict the service to certain browsers.
+
+The server should fetch each distinct course only once per polling cycle, even if many people watch sections in that course.
+
+For example, if 300 users watch sections in CS 246, perform one request for that course, parse all sections, then evaluate all 300 watches locally.
+
+==================================================
+SCHEDULING REQUIREMENTS
+==================================================
+
+Waterloo states that its Schedule of Classes is updated every 30 minutes between 8:00 a.m. and 8:00 p.m.
+
+The exact completion time of each update is not yet proven.
+
+For the initial MVP, schedule checks at:
+
+- 8:01 a.m.
+- 8:31 a.m.
+- 9:01 a.m.
+- 9:31 a.m.
+- Continuing every 30 minutes
+- Final check at 8:01 p.m.
+
+Use the timezone:
+
+America/Toronto
+
+Do not use a fixed UTC offset because daylight-saving time changes.
+
+Make the polling minutes configurable through environment variables so we can later change from :01/:31 to :03/:33 without editing application code.
+
+Also log:
+
+- When each polling cycle starts
+- Which distinct courses were fetched
+- Whether the request succeeded
+- Whether data changed
+- How many watches were evaluated
+- Whether notifications were queued or sent
+- Any errors
+
+Do not let one failed course request crash the entire polling cycle.
+
+For the MVP, APScheduler may run inside the FastAPI process, but document this restriction:
+
+- The deployment must run exactly one scheduler instance.
+- Running multiple web instances would cause duplicate jobs.
+- A future production version should use a separate worker, database lock, or distributed job system.
+
+Do not introduce those larger systems now.
+
+==================================================
+CORE NOTIFICATION LOGIC
+==================================================
+
+The system must notify only when a section transitions from full to potentially open.
+
+Example:
+
+Previous state:
+capacity = 70
+enrollment = 70
+available = 0
+
+Current state:
+capacity = 70
+enrollment = 69
+available = 1
+
+That should trigger an email.
+
+Use logic equivalent to:
+
+was_full = old_enrollment_total >= old_enrollment_capacity
+is_now_open = new_enrollment_total < new_enrollment_capacity
+
+if was_full and is_now_open:
+    notify_watchers()
+
+Important edge cases:
+
+1. First observation
+
+If there is no saved previous state, save the current state but do not send an opening alert.
+
+Otherwise, every section that is already open when the application launches would generate a misleading notification.
+
+2. Section remains open
+
+Do not send an email every polling cycle while the section remains open.
+
+3. Section fills and opens again
+
+This sequence may send two notifications:
+
+full -> open -> full -> open
+
+4. Duplicate polling execution
+
+The polling and notification logic should be idempotent enough that an accidental repeated execution does not immediately send duplicate emails.
+
+Use a notification record or a clearly designed state check if needed. Explain the chosen approach.
+
+5. Capacity changes
+
+Consider what should happen if Waterloo changes a section’s capacity rather than enrollment total.
+
+A transition from full to open because capacity increased should still count as a potential opening.
+
+6. Waterloo errors
+
+Do not treat missing, malformed, or failed data as zero enrollment or an open section.
+
+==================================================
+DATABASE DESIGN
+==================================================
+
+Use a small, understandable schema.
+
+Suggested tables:
+
+1. subscribers
+
+Fields:
+
+- id
+- email
+- verified_at
+- created_at
+- updated_at
+
+Email should be normalized and unique.
+
+2. watches
+
+Fields:
+
+- id
+- subscriber_id
+- level
+- term
+- subject
+- catalog_number
+- class_number
+- section_name
+- active
+- confirmed_at
+- created_at
+- updated_at
+- last_notified_at
+
+Prevent duplicate active watches for the same subscriber, term, and class number.
+
+3. section_states
+
+Fields:
+
+- id
+- level
+- term
+- subject
+- catalog_number
+- class_number
+- section_name
+- enrollment_capacity
+- enrollment_total
+- waitlist_capacity
+- waitlist_total
+- last_checked_at
+- created_at
+- updated_at
+
+Create a unique constraint based on term and class number.
+
+Use timezone-aware UTC timestamps in the database. Convert to America/Toronto only when displaying local times.
+
+It is acceptable to adjust this schema slightly if there is a clear reason, but explain the change before implementing it.
+
+==================================================
+EMAIL VERIFICATION AND UNSUBSCRIBE
+==================================================
+
+Do not activate arbitrary watches without proving that the person controls the submitted email address.
+
+Workflow:
+
+1. User selects a section and enters an email.
+2. Create a pending watch.
+3. Send a verification email containing a signed, expiring link.
+4. User clicks the link.
+5. Mark the subscriber and watch as confirmed and active.
+6. Show a confirmation page.
+
+Use signed tokens with:
+
+- A clear purpose field
+- Subscriber or watch identifier
+- Expiration
+- Protection against modifying identifiers
+
+Do not put secrets in source code.
+
+The alert email should include a signed unsubscribe or stop-watching link.
+
+The verification and unsubscribe endpoints must:
+
+- Handle invalid tokens
+- Handle expired tokens
+- Handle already-used links safely
+- Avoid exposing internal stack traces
+- Be idempotent where reasonable
+
+For local development, create an email backend abstraction.
+
+Provide:
+
+- A Resend email implementation
+- A development implementation that logs email contents and links to the console
+
+This lets us test the complete flow without buying a domain or sending real email during early development.
+
+==================================================
+WEBSITE PAGES
+==================================================
+
+Keep the UI small and clean.
+
+Required pages:
+
+1. Home/search page
+
+Fields:
+
+- Level
+- Term
+- Subject
+- Course number
+
+Use sensible validation and normalization:
+
+- Subject uppercase
+- Trim whitespace
+- Course number accepts values such as 101, 246E, or other catalog formats
+- Term validated as the format Waterloo expects
+- Do not assume every catalog number is numeric
+
+2. Search results page
+
+Show:
+
+- Course identity
+- Section name
+- Class number
+- Campus
+- Enrollment total
+- Enrollment capacity
+- Calculated available seats
+- Waitlist total and capacity
+- Meeting time
+- Room
+- A warning about reserves and eligibility
+
+Allow the user to select one section.
+
+3. Create-watch form
+
+Ask for email and confirm the chosen section.
+
+4. Verification-result page
+
+Show success, expired token, invalid token, or already confirmed.
+
+5. Unsubscribe-result page
+
+Show whether the watch was stopped successfully.
+
+6. Basic health endpoint
+
+GET /health
+
+Return a small JSON response.
+
+Do not build an account dashboard in the first MVP unless all required functionality is already complete and tested.
+
+==================================================
+PROJECT STRUCTURE
+==================================================
+
+Use a structure similar to:
+
+uw-seat-watch/
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── config.py
+│   ├── database.py
+│   ├── models.py
+│   ├── dependencies.py
+│   ├── schemas.py
+│   ├── logging_config.py
+│   ├── waterloo/
+│   │   ├── __init__.py
+│   │   ├── client.py
+│   │   └── parser.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── polling.py
+│   │   ├── notifications.py
+│   │   ├── email.py
+│   │   └── tokens.py
+│   ├── routes/
+│   │   ├── __init__.py
+│   │   ├── pages.py
+│   │   ├── watches.py
+│   │   └── health.py
+│   ├── templates/
+│   │   ├── base.html
+│   │   ├── index.html
+│   │   ├── results.html
+│   │   ├── watch_created.html
+│   │   ├── verified.html
+│   │   ├── unsubscribed.html
+│   │   └── error.html
+│   └── static/
+│       └── app.css
+├── tests/
+│   ├── fixtures/
+│   │   ├── afm101.html
+│   │   ├── section_full.html
+│   │   └── section_open.html
+│   ├── test_parser.py
+│   ├── test_polling.py
+│   ├── test_tokens.py
+│   └── test_routes.py
+├── migrations/
+├── .env.example
+├── .gitignore
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt or pyproject.toml
+└── README.md
+
+You may improve the organization slightly, but keep it understandable.
+
+Do not create unnecessary abstraction layers.
+
+==================================================
+CONFIGURATION
+==================================================
+
+Use environment variables and a typed settings class.
+
+Include at least:
+
+APP_ENV
+SECRET_KEY
+DATABASE_URL
+BASE_URL
+CONTACT_EMAIL
+EMAIL_BACKEND
+RESEND_API_KEY
+FROM_EMAIL
+WATERLOO_REQUEST_TIMEOUT_SECONDS
+POLL_MINUTES
+POLL_START_HOUR
+POLL_END_HOUR
+TIMEZONE
+LOG_LEVEL
+
+Safe local defaults are acceptable for non-secret values.
+
+SECRET_KEY must not have an insecure production default.
+
+Create a complete .env.example without real secrets.
+
+==================================================
+ERROR HANDLING
+==================================================
+
+Create clear custom exceptions for Waterloo request failures and parsing failures.
+
+Handle:
+
+- DNS or connection errors
+- Timeouts
+- Non-200 responses
+- Unexpected HTML
+- Empty search results
+- Malformed enrollment values
+- Database failures
+- Invalid forms
+- Email-provider failures
+- Expired or invalid tokens
+
+Do not silently convert malformed data to an “open” section.
+
+Do not expose raw exceptions to users.
+
+Log technical details server-side and show a useful generic message in the UI.
+
+Use HTML escaping through Jinja2. Do not render raw Waterloo HTML.
+
+==================================================
+TESTING REQUIREMENTS
+==================================================
+
+Testing is mandatory.
+
+At minimum, add tests for:
+
+1. AFM 101 parser
+
+Confirm exactly six real section rows are parsed.
+
+Confirm:
+
+- Class 3804 is LEC 001
+- Capacity is 70
+- Enrollment is 49
+- Available seats are 21
+- It appears open
+
+2. Nested HTML rows
+
+Confirm repeated meeting-time rows and reserve rows are not treated as sections.
+
+3. Full-to-open transition
+
+Confirm:
+
+70 / 70 -> 69 / 70
+
+produces one notification event.
+
+4. Initial observation
+
+Confirm an already-open first observation stores state but sends no notification.
+
+5. Open remains open
+
+Confirm:
+
+69 / 70 -> 68 / 70
+
+does not send another alert.
+
+6. Open fills and opens again
+
+Confirm:
+
+69 / 70 -> 70 / 70 -> 69 / 70
+
+allows another alert.
+
+7. Token tests
+
+Confirm valid, expired, malformed, and wrong-purpose tokens are handled.
+
+8. Search-route validation
+
+Confirm invalid term, missing subject, and malformed input produce user-friendly errors.
+
+9. Grouped polling
+
+Confirm multiple watches for the same course result in one Waterloo fetch.
+
+Mock external HTTP and email calls in tests.
+
+Do not rely on Waterloo being online for the test suite.
+
+==================================================
+SECURITY AND ABUSE PREVENTION
+==================================================
+
+For the MVP:
+
+- Validate and normalize all inputs.
+- Use signed verification and unsubscribe links.
+- Never expose the email API key.
+- Do not log full signed tokens in production.
+- Avoid email-header injection.
+- Prevent duplicate watches.
+- Add a simple reasonable rate limit or anti-abuse mechanism to watch creation if it can be implemented cleanly.
+- Do not add a huge authentication system.
+- Do not accept Waterloo passwords.
+- Do not automate Quest enrollment.
+
+Document that automated access must remain respectful of Waterloo’s systems and policies.
+
+The application must:
+
+- Fetch once per distinct course per polling cycle
+- Use caching within a cycle
+- Use a descriptive User-Agent
+- Use reasonable timeouts
+- Avoid high-frequency polling
+- Avoid retry storms
+
+==================================================
+DEPLOYMENT
+==================================================
+
+First make the project work locally.
+
+Then provide:
+
+- Dockerfile
+- docker-compose.yml for local development
+- PostgreSQL support
+- Production startup command
+- Health endpoint
+- README deployment notes
+- Environment-variable documentation
+
+Keep deployment provider-neutral where possible.
+
+The deployment must use only one application instance while APScheduler runs inside the web process.
+
+Explain this limitation clearly in the README.
+
+Do not prematurely add Redis, Celery, or distributed locks.
+
+==================================================
+DEFINITION OF DONE
+==================================================
+
+The MVP is done when all of these work:
+
+1. I can start the app locally on Windows using PowerShell.
+2. I can search AFM 101 for term 1269.
+3. The site fetches and parses Waterloo’s HTML.
+4. It displays the six known sections correctly.
+5. I can choose a section and enter an email.
+6. A verification link is generated.
+7. Clicking the link activates the watch.
+8. The scheduler groups watches by distinct course.
+9. The first observation saves state without sending an alert.
+10. A simulated full-to-open transition sends exactly one alert.
+11. Repeated open states do not send repeated alerts.
+12. A later full-to-open transition can send a new alert.
+13. The alert contains an unsubscribe link.
+14. Invalid and expired links are handled safely.
+15. Tests pass.
+16. The project has a usable README and Docker setup.
+17. The UI clearly warns that displayed availability is not guaranteed enrollment.
+
+==================================================
+HOW TO TEACH ME
+==================================================
+
+As you work, teach me the important concepts.
+
+For each phase, explain concepts such as:
+
+- Why this Waterloo endpoint is an HTML form POST rather than a JSON API
+- What application/x-www-form-urlencoded means
+- How BeautifulSoup turns HTML into a DOM-like tree
+- Why nested HTML tables complicate parsing
+- Why fixture-based tests are better than repeatedly scraping a live website
+- Why term plus class number identifies a section
+- What an ORM does
+- What database migrations do
+- What a transaction is
+- Why background jobs must be idempotent
+- Why we detect state transitions instead of only checking available > 0
+- Why email verification prevents abuse
+- Why secrets belong in environment variables
+- Why timezone-aware scheduling matters
+- Why multiple app instances can duplicate scheduled jobs
+- Why one course request should serve all watchers
+- Why production error handling differs from printing exceptions
+
+Keep the explanations practical and connected to the code being written.
+
+Do not give me a giant lecture before writing anything.
+
+Do not use unexplained abstractions.
+
+When you write an important function, walk me through its inputs, outputs, and failure cases.
+
+When something fails, explain the actual cause before patching it.
+
+Use type hints throughout.
+
+Add comments only where the reason for the code is not obvious. Do not fill the project with comments that merely repeat the code.
+
+==================================================
+WORKING STYLE
+==================================================
+
+Follow this sequence:
+
+Phase 1:
+- Inspect the repository
+- Create the Python project setup
+- Add typed configuration
+- Add Waterloo HTTP client
+- Add CourseSection model/dataclass
+- Add HTML parser
+- Save AFM 101 HTML fixture
+- Add parser tests
+- Run tests
+- Stop for my review
+
+Phase 2:
+- Database setup
+- Models
+- Migrations
+- Search form and results page
+- Route tests
+- Stop for review
+
+Phase 3:
+- Watch creation
+- Email abstraction
+- Signed verification
+- Verification pages
+- Tests
+- Stop for review
+
+Phase 4:
+- Section-state persistence
+- Grouped polling
+- Full-to-open detection
+- Scheduler
+- Notification email
+- Unsubscribe flow
+- Tests
+- Stop for review
+
+Phase 5:
+- UI cleanup
+- Error handling
+- Logging
+- Docker
+- PostgreSQL configuration
+- README
+- Final end-to-end test instructions
+
+At the end of each phase, provide:
+
+1. Files created or changed
+2. Commands you ran
+3. Test results
+4. What I should inspect
+5. One short question that checks whether I understood the main concept
+
+Do not continue past Phase 1 until I approve it.
+
+==================================================
+WINDOWS DEVELOPMENT ENVIRONMENT
+==================================================
+
+Assume I am using:
+
+- Windows
+- PowerShell
+- VS Code
+- Python 3.12
+
+Use PowerShell-compatible setup commands.
+
+Example:
+
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+Do not give only Linux shell instructions.
+
+If PowerShell execution policy blocks activation, explain the safe session-scoped command rather than telling me to permanently weaken system security.
+
+==================================================
+START NOW
+==================================================
+
+Begin by:
+
+1. Inspecting the repository.
+2. Explaining the Phase 1 plan.
+3. Creating the smallest clean scaffold.
+4. Implementing the Waterloo client and parser.
+5. Adding the AFM 101 fixture and parser tests.
+6. Running the tests.
+7. Stopping for my review.
+
+Do not build the website UI yet.
+Do not implement email yet.
+Do not implement the scheduler yet.
+Prove the data-fetching and parsing core first.
