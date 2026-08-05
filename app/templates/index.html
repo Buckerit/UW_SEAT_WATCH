@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>UW Seat Watch</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='/app.css') }}"
+    >
+</head>
+
+<body>
+    <main class="container">
+        <header class="page-header">
+            <p class="eyebrow">University of Waterloo</p>
+            <h1>UW Seat Watch</h1>
+
+            <p class="intro">
+                Search Waterloo's public Schedule of Classes and
+                check current section enrollment.
+            </p>
+        </header>
+
+        {% if errors %}
+            <section class="error-box" aria-label="Search errors">
+                <strong>We couldn't complete that search.</strong>
+
+                <ul>
+                    {% for error in errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
+
+        <form
+            class="search-form"
+            method="post"
+            action="/search"
+        >
+            <div class="field">
+                <label for="level">Level</label>
+
+                <select id="level" name="level" required>
+                    <option
+                        value="under"
+                        {% if values.level == "under" %}selected{% endif %}
+                    >
+                        Undergraduate
+                    </option>
+
+                    <option
+                        value="grad"
+                        {% if values.level == "grad" %}selected{% endif %}
+                    >
+                        Graduate
+                    </option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="term">Term code</label>
+
+                <input
+                    id="term"
+                    name="term"
+                    type="text"
+                    value="{{ values.term }}"
+                    inputmode="numeric"
+                    maxlength="4"
+                    placeholder="1269"
+                    required
+                >
+
+                <small>
+                    Example: 1269
+                </small>
+            </div>
+
+            <div class="field">
+                <label for="subject">Subject</label>
+
+                <input
+                    id="subject"
+                    name="subject"
+                    type="text"
+                    value="{{ values.subject }}"
+                    list="subject-codes"
+                    maxlength="8"
+                    autocomplete="off"
+                    aria-describedby="subject-no-match"
+                    required
+                >
+
+                <datalist id="subject-codes">
+                    {% for subject_code in subject_codes %}
+                        <option
+                            value="{{ subject_code }}"
+                        ></option>
+                    {% endfor %}
+                </datalist>
+
+                <small id="subject-no-match" class="no-match" hidden>
+                    No course code matches
+                </small>
+            </div>
+
+            <div class="field">
+                <label for="catalog_number">Course number</label>
+
+                <input
+                    id="catalog_number"
+                    name="catalog_number"
+                    type="text"
+                    value="{{ values.catalog_number }}"
+                    maxlength="16"
+                    placeholder="101"
+                    autocomplete="off"
+                    required
+                >
+            </div>
+
+            <button type="submit">
+                Search sections
+            </button>
+        </form>
+
+        <p class="disclaimer">
+            Enrollment values come from Waterloo's public Schedule
+            of Classes. An apparent opening does not guarantee that
+            you are eligible to enroll.
+        </p>
+    </main>
+
+    <script>
+        const subjectInput = document.querySelector("#subject");
+        const subjectNoMatch = document.querySelector("#subject-no-match");
+        const subjectCodes = {{ subject_codes | tojson }};
+
+        subjectInput.addEventListener("input", () => {
+            const value = subjectInput.value.trim().toUpperCase();
+            subjectInput.value = value;
+            subjectNoMatch.hidden = value === "" || subjectCodes.some((code) => code.startsWith(value));
+        });
+    </script>
+</body>
+</html>

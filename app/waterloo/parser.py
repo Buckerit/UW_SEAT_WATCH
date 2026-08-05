@@ -48,7 +48,7 @@ def parse_course_sections(html: str) -> list[CourseSection]:
     soup = BeautifulSoup(html, "html.parser")
     sections: list[CourseSection] = []
     
-    for row in soup:
+    for row in soup.find_all("tr"):
         cells = _direct_cells(row)
         if len(cells) < 12:
             continue

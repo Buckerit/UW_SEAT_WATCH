@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>{{ subject }} {{ catalog_number }} | UW Seat Watch</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='/app.css') }}"
+    >
+</head>
+
+<body>
+    <main class="container container-wide">
+        <a class="back-link" href="/">
+            ← Search another course
+        </a>
+
+        <header class="page-header">
+            <p class="eyebrow">
+                Term {{ term }}
+            </p>
+
+            <h1>
+                {{ subject }} {{ catalog_number }}
+            </h1>
+
+            <p class="intro">
+                {{ sections | length }} sections found.
+            </p>
+        </header>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Section</th>
+                        <th>Class</th>
+                        <th>Campus</th>
+                        <th>Enrollment</th>
+                        <th>Available</th>
+                        <th>Wait-list</th>
+                        <th>Time</th>
+                        <th>Room</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for section in sections %}
+                        <tr>
+                            <td>
+                                <strong>
+                                    {{ section.section_number }}
+                                </strong>
+                            </td>
+
+                            <td>
+                                {{ section.class_number }}
+                            </td>
+
+                            <td>
+                                {{ section.campus_type }}
+                            </td>
+
+                            <td>
+                                {{ section.enrollment_total }}
+                                /
+                                {{ section.enrollment_capacity }}
+                            </td>
+
+                            <td>
+                                {% if section.appears_open %}
+                                    <span class="status status-open">
+                                        {{ section.available_seats }}
+                                    </span>
+                                {% else %}
+                                    <span class="status status-full">
+                                        Full
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {{ section.waitlist_total }}
+                                /
+                                {{ section.waitlist_capacity }}
+                            </td>
+
+                            <td>
+                                {{ section.meeting_time or "—" }}
+                            </td>
+
+                            <td>
+                                {{ section.room or "—" }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <section class="warning-box">
+            <strong>Availability is not guaranteed.</strong>
+
+            <p>
+                Reserved seats, related components, prerequisites,
+                restrictions, and Quest eligibility may prevent
+                enrollment even when capacity appears available.
+            </p>
+        </section>
+    </main>
+</body>
+</html>
