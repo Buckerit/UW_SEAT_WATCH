@@ -14,23 +14,18 @@ from app.models import Subscriber, Watch
 from app.waterloo.client import WaterlooClientError, fetch_course_html
 from app.waterloo.parser import parse_course_sections
 
+from fastapi.templating import Jinja2Templates
+
 
 router = APIRouter()
 
-templates = Jinja2Templates(
-    directory="app/templates",
-)
-
+templates = Jinja2Templates(directory="app/templates")
 
 EMAIL_PATTERN = re.compile(
     r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 )
 
-
-@router.post(
-    "/watches",
-    response_class=HTMLResponse,
-)
+@router.post("/watches", response_class=HTMLResponse)
 async def create_watch(
     request: Request,
     level: str = Form(...),
@@ -69,9 +64,9 @@ async def create_watch(
             subject=normalized_subject,
             catalog_num=normalized_catalog_number,
         )
-
+        
         sections = parse_course_sections(html)
-
+        
     except WaterlooClientError:
         return templates.TemplateResponse(
             request=request,
@@ -85,7 +80,7 @@ async def create_watch(
             },
             status_code=status.HTTP_502_BAD_GATEWAY,
         )
-
+    
     selected_section = next(
         (
             section
@@ -95,7 +90,7 @@ async def create_watch(
         ),
         None,
     )
-
+    
     if selected_section is None:
         return templates.TemplateResponse(
             request=request,
@@ -109,24 +104,19 @@ async def create_watch(
             },
             status_code=status.HTTP_404_NOT_FOUND,
         )
-
+        
     subscriber = db.scalar(
-        select(Subscriber).where(
-            Subscriber.email == normalized_email
-        )
+        select(Subscriber).where(Subscriber.email == normalized_email)
     )
-
+    
     if subscriber is None:
         subscriber = Subscriber(
             email=normalized_email,
         )
 
         db.add(subscriber)
-
-        # Send the INSERT without committing yet.
-        # This gives subscriber.id a value for the Watch.
         db.flush()
-
+        
     existing_watch = db.scalar(
         select(Watch).where(
             Watch.subscriber_id == subscriber.id,
@@ -135,7 +125,7 @@ async def create_watch(
             == selected_section.class_number,
         )
     )
-
+    
     if existing_watch is not None:
         db.rollback()
 
@@ -156,7 +146,7 @@ async def create_watch(
                 "catalog_number": normalized_catalog_number,
             },
         )
-
+        
     watch = Watch(
         level=normalized_level,
         term=normalized_term,
@@ -166,7 +156,7 @@ async def create_watch(
         section_name=selected_section.section_number,
         active=False,
     )
-
+    
     subscriber.watches.append(watch)
 
     try:

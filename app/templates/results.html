@@ -35,74 +35,134 @@
             </p>
         </header>
 
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Section</th>
-                        <th>Class</th>
-                        <th>Campus</th>
-                        <th>Enrollment</th>
-                        <th>Available</th>
-                        <th>Wait-list</th>
-                        <th>Time</th>
-                        <th>Room</th>
-                    </tr>
-                </thead>
+        <form method="post" action="/watches">
+            <input
+                type="hidden"
+                name="level"
+                value="{{ level }}"
+            >
 
-                <tbody>
-                    {% for section in sections %}
+            <input
+                type="hidden"
+                name="term"
+                value="{{ term }}"
+            >
+
+            <input
+                type="hidden"
+                name="subject"
+                value="{{ subject }}"
+            >
+
+            <input
+                type="hidden"
+                name="catalog_number"
+                value="{{ catalog_number }}"
+            >
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
                         <tr>
-                            <td>
-                                <strong>
-                                    {{ section.section_number }}
-                                </strong>
-                            </td>
-
-                            <td>
-                                {{ section.class_number }}
-                            </td>
-
-                            <td>
-                                {{ section.campus_type }}
-                            </td>
-
-                            <td>
-                                {{ section.enrollment_total }}
-                                /
-                                {{ section.enrollment_capacity }}
-                            </td>
-
-                            <td>
-                                {% if section.appears_open %}
-                                    <span class="status status-open">
-                                        {{ section.available_seats }}
-                                    </span>
-                                {% else %}
-                                    <span class="status status-full">
-                                        Full
-                                    </span>
-                                {% endif %}
-                            </td>
-
-                            <td>
-                                {{ section.waitlist_total }}
-                                /
-                                {{ section.waitlist_capacity }}
-                            </td>
-
-                            <td>
-                                {{ section.meeting_time or "—" }}
-                            </td>
-
-                            <td>
-                                {{ section.room or "—" }}
-                            </td>
+                            <th>Select</th>
+                            <th>Section</th>
+                            <th>Class</th>
+                            <th>Campus</th>
+                            <th>Enrollment</th>
+                            <th>Available</th>
+                            <th>Wait-list</th>
+                            <th>Time</th>
+                            <th>Room</th>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+
+                    <tbody>
+                        {% for section in sections %}
+                            <tr>
+                                <td>
+                                    <input
+                                        type="radio"
+                                        name="class_number"
+                                        value="{{ section.class_number }}"
+                                        required
+                                    >
+                                </td>
+
+                                <td>
+                                    <strong>
+                                        {{ section.section_number }}
+                                    </strong>
+                                </td>
+
+                                <td>
+                                    {{ section.class_number }}
+                                </td>
+
+                                <td>
+                                    {{ section.campus_type }}
+                                </td>
+
+                                <td>
+                                    {{ section.enrollment_total }}
+                                    /
+                                    {{ section.enrollment_capacity }}
+                                </td>
+
+                                <td>
+                                    {% if section.appears_open %}
+                                        <span class="status status-open">
+                                            {{ section.available_seats }}
+                                        </span>
+                                    {% else %}
+                                        <span class="status status-full">
+                                            Full
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ section.waitlist_total }}
+                                    /
+                                    {{ section.waitlist_capacity }}
+                                </td>
+
+                                <td>
+                                    {{ section.meeting_time or "—" }}
+                                </td>
+
+                                <td>
+                                    {{ section.room or "—" }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <section class="watch-panel">
+                <label for="email">
+                    Email address
+                </label>
+
+                <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    maxlength="320"
+                    placeholder="you@example.com"
+                    required
+                >
+
+                <button type="submit">
+                    Watch selected section
+                </button>
+
+                <small>
+                    The watch will remain inactive until the email is
+                    verified.
+                </small>
+            </section>
+        </form>
 
         <section class="warning-box">
             <strong>Availability is not guaranteed.</strong>

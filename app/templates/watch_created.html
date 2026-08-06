@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>Watch status | UW Seat Watch</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='/app.css') }}"
+    >
+</head>
+
+<body>
+    <main class="container">
+        <a class="back-link" href="/">
+            ← Search another course
+        </a>
+
+        {% if success %}
+            <p class="eyebrow">Watch saved</p>
+            <h1>Almost done</h1>
+
+            <section class="warning-box">
+                <strong>{{ message }}</strong>
+
+                {% if watch %}
+                    <p>
+                        {{ subject }} {{ catalog_number }}
+                        — {{ watch.section_name }}
+                    </p>
+
+                    <p>
+                        Notification email:
+                        <strong>{{ email }}</strong>
+                    </p>
+                {% endif %}
+            </section>
+
+            <p class="disclaimer">
+                Email verification will be added in the next step.
+                Until then, this watch remains inactive.
+            </p>
+        {% else %}
+            <p class="eyebrow">Watch not saved</p>
+            <h1>Something went wrong</h1>
+
+            <section class="error-box">
+                {{ message }}
+            </section>
+        {% endif %}
+    </main>
+</body>
+</html>
