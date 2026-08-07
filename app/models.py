@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Integer,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -240,3 +241,52 @@ class SectionState(Base):
     @property
     def appears_open(self) -> bool:
         return self.enrollment_total < self.enrollment_capacity
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+    )
+
+    watch_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "watches.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    kind: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+    )
+
+    payload: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    last_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )

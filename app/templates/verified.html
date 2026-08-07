@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>Verification | UW Seat Watch</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='/app.css') }}"
+    >
+</head>
+
+<body>
+    <main class="container">
+        {% if success %}
+            <p class="eyebrow">Verification complete</p>
+            <h1>Watch activated</h1>
+
+            <section class="warning-box">
+                <strong>{{ message }}</strong>
+
+                {% if watch %}
+                    <p>
+                        {{ watch.subject }}
+                        {{ watch.catalog_number }}
+                        — {{ watch.section_name }}
+                    </p>
+                {% endif %}
+            </section>
+
+            {% if not already_verified %}
+                <p>
+                    UW Seat Watch will now check this section during
+                    scheduled polling periods.
+                </p>
+            {% endif %}
+        {% else %}
+            <p class="eyebrow">Verification failed</p>
+            <h1>Link not accepted</h1>
+
+            <section class="error-box">
+                {{ message }}
+            </section>
+        {% endif %}
+
+        <a class="back-link" href="/">
+            Search another course
+        </a>
+    </main>
+</body>
+</html> 

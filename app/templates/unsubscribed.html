@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Unsubscribe | UW Seat Watch</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='/app.css') }}"
+    >
+</head>
+
+<body>
+    <main class="container">
+        {% if success %}
+            <p class="eyebrow">Watch updated</p>
+            <h1>Alerts stopped</h1>
+
+            <section class="warning-box">
+                {{ message }}
+
+                {% if watch %}
+                    <p>
+                        {{ watch.subject }}
+                        {{ watch.catalog_number }}
+                        &mdash; {{ watch.section_name }}
+                    </p>
+                {% endif %}
+            </section>
+        {% else %}
+            <h1>Couldn't unsubscribe</h1>
+
+            <section class="error-box">
+                {{ message }}
+            </section>
+        {% endif %}
+
+        <a href="/">Search another course</a>
+    </main>
+</body>
+</html>

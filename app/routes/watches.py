@@ -16,6 +16,17 @@ from app.waterloo.parser import parse_course_sections
 
 from fastapi.templating import Jinja2Templates
 
+from datetime import datetime, timezone
+
+from app.services.notifications import send_watch_verification_email
+
+from app.services.tokens import (
+    VerificationTokenError,
+    VerificationTokenExpired,
+    read_watch_unsubscribe_token,
+    read_watch_verification_token,
+)
+
 
 router = APIRouter()
 
@@ -162,6 +173,13 @@ async def create_watch(
     try:
         db.commit()
         db.refresh(watch)
+        verification_url = send_watch_verification_email(
+            watch_id=watch.id,
+            email=subscriber.email,
+            subject=watch.subject,
+            catalog_number=watch.catalog_number,
+            section_name=watch.section_name,
+        )
 
     except IntegrityError:
         db.rollback()
@@ -191,6 +209,143 @@ async def create_watch(
             "email": normalized_email,
             "subject": normalized_subject,
             "catalog_number": normalized_catalog_number,
+            "verification_url": verification_url,
         },
         status_code=status.HTTP_201_CREATED,
+    )
+
+@router.get("/verify", response_class=HTMLResponse)
+def verify_watch(request: Request, token: str, db: Session = Depends(get_db)) -> HTMLResponse:
+    try:
+        watch_id = read_watch_verification_token(token)
+
+    except VerificationTokenExpired:
+        return templates.TemplateResponse(
+            request=request,
+            name="verified.html",
+            context={
+                "success": False,
+                "message": "This verification link has expired.",
+            },
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    except VerificationTokenError:
+        return templates.TemplateResponse(
+            request=request,
+            name="verified.html",
+            context={
+                "success": False,
+                "message": "This verification link is invalid.",
+            },
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    watch = db.get(Watch, watch_id)
+
+    if watch is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="verified.html",
+            context={
+                "success": False,
+                "message": "This watch no longer exists.",
+            },
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    if watch.active and watch.confirmed_at is not None:
+        return templates.TemplateResponse(
+            request=request,
+            name="verified.html",
+            context={
+                "success": True,
+                "already_verified": True,
+                "message": "This watch is already active.",
+                "watch": watch,
+            },
+        )
+
+    verified_at = datetime.now(timezone.utc)
+
+    watch.active = True
+    watch.confirmed_at = verified_at
+
+    if watch.subscriber.verified_at is None:
+        watch.subscriber.verified_at = verified_at
+
+    db.commit()
+    db.refresh(watch)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="verified.html",
+        context={
+            "success": True,
+            "already_verified": False,
+            "message": "Your watch is now active.",
+            "watch": watch,
+        },
+    )
+
+
+@router.get(
+    "/unsubscribe",
+    response_class=HTMLResponse,
+)
+def unsubscribe_watch(
+    request: Request,
+    token: str,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    try:
+        watch_id = read_watch_unsubscribe_token(token)
+
+    except VerificationTokenError:
+        return templates.TemplateResponse(
+            request=request,
+            name="unsubscribed.html",
+            context={
+                "success": False,
+                "message": "This unsubscribe link is invalid.",
+            },
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    watch = db.get(Watch, watch_id)
+
+    if watch is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="unsubscribed.html",
+            context={
+                "success": False,
+                "message": "This watch no longer exists.",
+            },
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    if not watch.active:
+        return templates.TemplateResponse(
+            request=request,
+            name="unsubscribed.html",
+            context={
+                "success": True,
+                "message": "This watch is already inactive.",
+                "watch": watch,
+            },
+        )
+
+    watch.active = False
+
+    db.commit()
+
+    return templates.TemplateResponse(
+        request=request,
+        name="unsubscribed.html",
+        context={
+            "success": True,
+            "message": "You will no longer receive alerts for this section.",
+            "watch": watch,
+        },
     )

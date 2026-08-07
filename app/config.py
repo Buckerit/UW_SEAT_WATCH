@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # SECRET_KEY is allowed to be a placeholder locally, but production must override it.
-    secret_key: str = "local-dev-only-change-me"
+    secret_key: str = "ZgJGR5iXY2gYzooY0sEbpxvX767Rl0oNZ2qd_ImTJ2o"
 
     base_url: str = "http://127.0.0.1:8000"
     contact_email: str = "arothe995@gmail.com"
@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     )
     waterloo_request_timeout_seconds: float = Field(default=15.0, gt=0)
 
+    scheduler_enabled: bool = False
     poll_minutes: str = "1,31"
     poll_start_hour: int = Field(default=8, ge=0, le=23)
     poll_end_hour: int = Field(default=20, ge=0, le=23)

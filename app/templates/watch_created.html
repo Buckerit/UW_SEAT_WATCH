@@ -40,6 +40,18 @@
                         <strong>{{ email }}</strong>
                     </p>
                 {% endif %}
+
+                {% if verification_url %}
+                    <p>
+                        Development verification link:
+                    </p>
+
+                    <p>
+                        <a href="{{ verification_url }}">
+                            Verify and activate this watch
+                        </a>
+                    </p>
+                {% endif %}
             </section>
 
             <p class="disclaimer">
