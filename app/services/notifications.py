@@ -46,6 +46,8 @@ Section: {course_label}
 Verify and activate:
 {verification_url}
 
+If you do not see it, check your spam, junk, and Promotions folders.
+
 To cancel this watch:
 {unsubscribe_url}
 
@@ -63,6 +65,11 @@ If you did not request this watch, you can ignore this email.
         <a href="{verification_url}">
             Verify and activate
         </a>
+    </p>
+
+    <p>
+        If you do not see this email, check your spam, junk,
+        and Promotions folders.
     </p>
 
     <p>
