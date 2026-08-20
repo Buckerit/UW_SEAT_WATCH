@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
 from app.models import Notification, SectionState, Subscriber, Watch, utc_now
+from app.services.audit import log_event, mask_email
 from app.waterloo.client import WaterlooClientError, fetch_course_html
 from app.waterloo.parser import parse_course_sections
 
@@ -71,20 +72,6 @@ def aware_utc(value: datetime | None) -> datetime | None:
         return value.replace(tzinfo=timezone.utc)
 
     return value.astimezone(timezone.utc)
-
-
-def mask_email(email: str) -> str:
-    local, separator, domain = email.partition("@")
-
-    if not separator:
-        return email
-
-    if len(local) <= 1:
-        hidden_local = "*"
-    else:
-        hidden_local = f"{local[0]}***"
-
-    return f"{hidden_local}@{domain}"
 
 
 def term_label(term: str) -> str:
@@ -323,6 +310,15 @@ def request_manage_link(
         len(normalized_email) > 320
         or EMAIL_PATTERN.fullmatch(normalized_email) is None
     ):
+        log_event(
+            "watch",
+            "rejected_email",
+            email=mask_email(normalized_email),
+            subject=normalized_subject,
+            catalog=normalized_catalog_number,
+            term=normalized_term,
+        )
+
         return templates.TemplateResponse(
             request=request,
             name="manage.html",
@@ -337,6 +333,14 @@ def request_manage_link(
     seconds_left = manage_link_seconds_left(normalized_email)
     subscriber = db.scalar(
         select(Subscriber).where(Subscriber.email == normalized_email)
+    )
+
+    log_event(
+        "manage",
+        "link_requested",
+        email=mask_email(normalized_email),
+        email_found=subscriber is not None,
+        sent=subscriber is not None and seconds_left <= 0,
     )
 
     if seconds_left <= 0:
@@ -419,6 +423,14 @@ def resend_manage_link(
                     email=subscriber.email,
                 )
 
+            log_event(
+                "manage",
+                "link_resent",
+                email=mask_email(normalized_email),
+                email_found=subscriber is not None,
+                sent=subscriber is not None,
+            )
+
     return templates.TemplateResponse(
         request=request,
         name="manage.html",
@@ -492,6 +504,17 @@ def remove_managed_watch(
         db.commit()
         db.refresh(subscriber)
 
+        log_event(
+            "manage",
+            "watch_removed",
+            email=mask_email(subscriber.email),
+            subject=watch.subject,
+            catalog=watch.catalog_number,
+            section=watch.section_name,
+            class_number=watch.class_number,
+            term=watch.term,
+        )
+
     return templates.TemplateResponse(
         request=request,
         name="manage.html",
@@ -529,6 +552,12 @@ def stop_all_managed_watches(
 
     db.commit()
     db.refresh(subscriber)
+
+    log_event(
+        "manage",
+        "all_watches_removed",
+        email=mask_email(subscriber.email),
+    )
 
     return templates.TemplateResponse(
         request=request,
@@ -609,6 +638,16 @@ async def create_watch(
     )
     
     if selected_section is None:
+        log_event(
+            "watch",
+            "section_not_found",
+            email=mask_email(normalized_email),
+            subject=normalized_subject,
+            catalog=normalized_catalog_number,
+            class_number=normalized_class_number,
+            term=normalized_term,
+        )
+
         return templates.TemplateResponse(
             request=request,
             name="watch_created.html",
@@ -662,6 +701,17 @@ async def create_watch(
                 existing_watch,
             )
 
+            log_event(
+                "watch",
+                "verification_resent",
+                email=mask_email(normalized_email),
+                subject=existing_watch.subject,
+                catalog=existing_watch.catalog_number,
+                section=existing_watch.section_name,
+                class_number=existing_watch.class_number,
+                term=existing_watch.term,
+            )
+
             return templates.TemplateResponse(
                 request=request,
                 name="watch_created.html",
@@ -681,6 +731,17 @@ async def create_watch(
                 },
             )
 
+        log_event(
+            "watch",
+            "already_exists",
+            email=mask_email(normalized_email),
+            subject=existing_watch.subject,
+            catalog=existing_watch.catalog_number,
+            section=existing_watch.section_name,
+            class_number=existing_watch.class_number,
+            term=existing_watch.term,
+        )
+
         return templates.TemplateResponse(
             request=request,
             name="watch_created.html",
@@ -698,7 +759,7 @@ async def create_watch(
                 "catalog_number": normalized_catalog_number,
             },
         )
-        
+
     watch = Watch(
         level=normalized_level,
         term=normalized_term,
@@ -726,6 +787,18 @@ async def create_watch(
         verification_url = send_and_mark_verification_email(
             db,
             watch,
+        )
+
+        log_event(
+            "watch",
+            "created",
+            email=mask_email(normalized_email),
+            subject=watch.subject,
+            catalog=watch.catalog_number,
+            section=watch.section_name,
+            class_number=watch.class_number,
+            term=watch.term,
+            currently_open=watch.last_seen_open,
         )
 
     except IntegrityError:
@@ -920,6 +993,17 @@ def verify_watch(request: Request, token: str, db: Session = Depends(get_db)) ->
         )
 
     if watch.active and watch.confirmed_at is not None:
+        log_event(
+            "verify",
+            "already_active",
+            email=mask_email(watch.subscriber.email),
+            subject=watch.subject,
+            catalog=watch.catalog_number,
+            section=watch.section_name,
+            class_number=watch.class_number,
+            term=watch.term,
+        )
+
         return templates.TemplateResponse(
             request=request,
             name="verified.html",
@@ -944,6 +1028,17 @@ def verify_watch(request: Request, token: str, db: Session = Depends(get_db)) ->
 
     db.commit()
     db.refresh(watch)
+
+    log_event(
+        "verify",
+        "activated",
+        email=mask_email(watch.subscriber.email),
+        subject=watch.subject,
+        catalog=watch.catalog_number,
+        section=watch.section_name,
+        class_number=watch.class_number,
+        term=watch.term,
+    )
 
     return templates.TemplateResponse(
         request=request,
@@ -994,6 +1089,17 @@ def unsubscribe_watch(
         )
 
     if not watch.active:
+        log_event(
+            "unsubscribe",
+            "already_inactive",
+            email=mask_email(watch.subscriber.email),
+            subject=watch.subject,
+            catalog=watch.catalog_number,
+            section=watch.section_name,
+            class_number=watch.class_number,
+            term=watch.term,
+        )
+
         return templates.TemplateResponse(
             request=request,
             name="unsubscribed.html",
@@ -1007,6 +1113,17 @@ def unsubscribe_watch(
     watch.active = False
 
     db.commit()
+
+    log_event(
+        "unsubscribe",
+        "deactivated",
+        email=mask_email(watch.subscriber.email),
+        subject=watch.subject,
+        catalog=watch.catalog_number,
+        section=watch.section_name,
+        class_number=watch.class_number,
+        term=watch.term,
+    )
 
     return templates.TemplateResponse(
         request=request,

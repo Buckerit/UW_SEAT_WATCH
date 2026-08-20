@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.config import get_settings
+from app.services.audit import log_event, mask_email
 from app.services.email import send_email
 from app.services.tokens import (
     create_manage_watches_token,
@@ -81,6 +82,16 @@ If you did not request this watch, you can ignore this email.
         subject=email_subject,
         html=html,
         text=text,
+    )
+
+    log_event(
+        "email",
+        "verification_sent",
+        email=mask_email(email),
+        subject=subject,
+        catalog=catalog_number,
+        section=section_name,
+        watch_id=watch_id,
     )
 
     return verification_url
@@ -181,6 +192,17 @@ To cancel this watch:
         text=text,
     )
 
+    log_event(
+        "email",
+        "opening_alert_sent",
+        email=mask_email(email),
+        subject=subject,
+        catalog=catalog_number,
+        section=section_name,
+        watch_id=watch_id,
+        available_seats=available_seats,
+    )
+
 
 def send_manage_watches_email(
     *,
@@ -238,6 +260,13 @@ If you did not request this, you can ignore this email.
         subject="Manage your UW Seat Watch watches",
         html=html,
         text=text,
+    )
+
+    log_event(
+        "email",
+        "manage_link_sent",
+        email=mask_email(email),
+        subscriber_id=subscriber_id,
     )
 
     return manage_url

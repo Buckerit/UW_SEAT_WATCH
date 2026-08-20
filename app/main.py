@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -17,6 +18,11 @@ from app.services.scheduler import create_scheduler
 
 settings = get_settings()
 templates = Jinja2Templates(directory="app/templates")
+
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format="%(levelname)s:%(name)s:%(message)s",
+)
 
 
 @asynccontextmanager

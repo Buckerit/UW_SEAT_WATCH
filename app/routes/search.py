@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import get_settings
+from app.services.audit import log_event
 from app.waterloo.client import (
     fetch_course_html,
     fetch_published_term_codes,
@@ -169,6 +170,15 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
         )
 
     if errors:
+        log_event(
+            "search",
+            "rejected",
+            level=normalized_level,
+            term=normalized_term,
+            subject=normalized_subject,
+            catalog=normalized_catalog_number,
+        )
+
         return templates.TemplateResponse(
             request=request,
             name="index.html",
@@ -186,6 +196,15 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
         published_terms = set()
 
     if published_terms and waterloo_term not in published_terms:
+        log_event(
+            "search",
+            "unpublished_term",
+            level=normalized_level,
+            term=normalized_term,
+            subject=normalized_subject,
+            catalog=normalized_catalog_number,
+        )
+
         return templates.TemplateResponse(
             request=request,
             name="index.html",
@@ -201,6 +220,16 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
         )
     
     try: 
+        log_event(
+            "search",
+            "requested",
+            level=normalized_level,
+            term=waterloo_term,
+            friendly_term=normalized_term,
+            subject=normalized_subject,
+            catalog=normalized_catalog_number,
+        )
+
         html = await fetch_course_html(
             level=normalized_level,
             catalog_num=normalized_catalog_number,
@@ -209,6 +238,15 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
         )
         sections = parse_course_sections(html)
     except WaterlooClientError:
+        log_event(
+            "search",
+            "waterloo_error",
+            level=normalized_level,
+            term=waterloo_term,
+            subject=normalized_subject,
+            catalog=normalized_catalog_number,
+        )
+
         return templates.TemplateResponse(
             request=request,
             name="index.html",
@@ -223,6 +261,15 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
             status_code=status.HTTP_502_BAD_GATEWAY,
         )
     if not sections:
+        log_event(
+            "search",
+            "not_found",
+            level=normalized_level,
+            term=waterloo_term,
+            subject=normalized_subject,
+            catalog=normalized_catalog_number,
+        )
+
         return templates.TemplateResponse(
             name="index.html",
             request=request,
@@ -237,7 +284,16 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
             },
             status_code=status.HTTP_404_NOT_FOUND,
         )
-            
+    log_event(
+        "search",
+        "found",
+        level=normalized_level,
+        term=waterloo_term,
+        subject=normalized_subject,
+        catalog=normalized_catalog_number,
+        sections=len(sections),
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="results.html",
