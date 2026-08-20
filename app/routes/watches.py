@@ -488,7 +488,7 @@ def remove_managed_watch(
     )
 
     if watch is not None:
-        watch.active = False
+        db.delete(watch)
         db.commit()
         db.refresh(subscriber)
 
@@ -524,8 +524,8 @@ def stop_all_managed_watches(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    for watch in subscriber.watches:
-        watch.active = False
+    for watch in list(subscriber.watches):
+        db.delete(watch)
 
     db.commit()
     db.refresh(subscriber)

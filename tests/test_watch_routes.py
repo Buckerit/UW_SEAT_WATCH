@@ -731,7 +731,7 @@ def test_manage_cannot_remove_another_subscribers_watch(route_db) -> None:
     assert other_watch.active is True
 
 
-def test_manage_individual_removal_deactivates_watch(route_db) -> None:
+def test_manage_individual_removal_deletes_watch(route_db) -> None:
     watch_id = add_watch(route_db, active=True)
 
     with route_db() as db:
@@ -750,11 +750,10 @@ def test_manage_individual_removal_deactivates_watch(route_db) -> None:
         watch = db.get(Watch, watch_id)
 
     assert response.status_code == 200
-    assert watch is not None
-    assert watch.active is False
+    assert watch is None
 
 
-def test_manage_stop_all_only_deactivates_authorized_subscriber(
+def test_manage_stop_all_only_deletes_authorized_subscriber_watches(
     route_db,
 ) -> None:
     own_watch_id = add_watch(
@@ -787,9 +786,8 @@ def test_manage_stop_all_only_deactivates_authorized_subscriber(
         other_watch = db.get(Watch, other_watch_id)
 
     assert response.status_code == 200
-    assert own_watch is not None
+    assert own_watch is None
     assert other_watch is not None
-    assert own_watch.active is False
     assert other_watch.active is True
 
 
@@ -888,7 +886,83 @@ def test_new_watch_can_be_created_after_stop_all(
         ).all()
 
     assert response.status_code == 201
-    assert len(watches) == 2
+    assert len(watches) == 1
+
+
+def test_same_watch_can_be_created_after_manage_remove(
+    route_db,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    watch_id = add_watch(route_db, active=True)
+
+    with route_db() as db:
+        watch = db.get(Watch, watch_id)
+        assert watch is not None
+        token = create_manage_watches_token(
+            subscriber_id=watch.subscriber_id,
+            email="route@example.com",
+        )
+
+    client = TestClient(app)
+    client.post(f"/manage/{token}/watches/{watch_id}/remove")
+
+    async def fake_fetch_course_html(**kwargs: str) -> str:
+        return "<html>ok</html>"
+
+    def fake_parse_course_sections(html: str) -> list[CourseSection]:
+        return [
+            CourseSection(
+                class_number="3804",
+                section_number="LEC 001",
+                campus_type="UW U",
+                associated_class="1",
+                enrollment_capacity=70,
+                enrollment_total=70,
+                waitlist_capacity=0,
+                waitlist_total=0,
+                meeting_time="",
+                room="",
+            )
+        ]
+
+    monkeypatch.setattr(
+        watch_routes,
+        "fetch_course_html",
+        fake_fetch_course_html,
+    )
+    monkeypatch.setattr(
+        watch_routes,
+        "parse_course_sections",
+        fake_parse_course_sections,
+    )
+    monkeypatch.setattr(
+        watch_routes,
+        "send_watch_verification_email",
+        lambda **kwargs: "https://example.com/verify",
+    )
+
+    response = client.post(
+        "/watches",
+        data={
+            "level": "under",
+            "term": "1269",
+            "subject": "AFM",
+            "catalog_number": "101",
+            "class_number": "3804",
+            "email": "route@example.com",
+        },
+    )
+
+    with route_db() as db:
+        watches = db.scalars(
+            select(Watch).join(Subscriber).where(
+                Subscriber.email == "route@example.com"
+            )
+        ).all()
+
+    assert response.status_code == 201
+    assert len(watches) == 1
+    assert watches[0].class_number == "3804"
 
 
 def test_unsubscribe_route_deactivates_watch(route_db) -> None:
