@@ -97,7 +97,7 @@
                     </form>
 
                     {% if resend_message %}
-                        <p class="resend-message">
+                        <p class="resend-message" data-countdown-message>
                             {{ resend_message }}
                         </p>
                     {% endif %}
@@ -137,5 +137,40 @@
             });
         </script>
     {% endif %}
+
+    <script>
+        for (const message of document.querySelectorAll("[data-countdown-message]")) {
+            const match = message.textContent.match(/Wait about (\d+) seconds before resending\./);
+
+            if (!match) {
+                continue;
+            }
+
+            let secondsLeft = Number(match[1]);
+            const resendButton = document.querySelector(".resend-form button");
+
+            if (resendButton) {
+                resendButton.disabled = true;
+            }
+
+            const tick = () => {
+                if (secondsLeft <= 0) {
+                    message.textContent = "You can resend now.";
+
+                    if (resendButton) {
+                        resendButton.disabled = false;
+                    }
+
+                    return;
+                }
+
+                message.textContent = `Wait about ${secondsLeft} seconds before resending.`;
+                secondsLeft -= 1;
+                window.setTimeout(tick, 1000);
+            };
+
+            tick();
+        }
+    </script>
 </body>
 </html>

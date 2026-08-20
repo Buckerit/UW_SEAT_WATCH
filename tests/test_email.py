@@ -85,6 +85,7 @@ def test_brevo_backend_posts_expected_payload(
         ],
         "subject": "Seat open",
         "htmlContent": "<p>Open</p>",
+        "textContent": "Open",
     }
     assert sent["timeout"] == 15.0
 

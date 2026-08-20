@@ -70,6 +70,7 @@ def send_email(
                     ],
                     "subject": subject,
                     "htmlContent": html,
+                    "textContent": text,
                 },
                 timeout=15.0,
             )

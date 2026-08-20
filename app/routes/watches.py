@@ -24,6 +24,7 @@ from app.services.notifications import (
     send_manage_watches_email,
     send_watch_verification_email,
 )
+from app.services.outbox import send_pending_notifications
 
 from app.services.tokens import (
     VerificationTokenError,
@@ -1023,11 +1024,19 @@ def verify_watch(request: Request, token: str, db: Session = Depends(get_db)) ->
     if watch.subscriber.verified_at is None:
         watch.subscriber.verified_at = verified_at
 
-    if watch.last_seen_open and watch.last_notified_at is None:
+    should_send_opening_alert = (
+        watch.last_seen_open
+        and watch.last_notified_at is None
+    )
+
+    if should_send_opening_alert:
         queue_opening_notification(db, watch)
 
     db.commit()
     db.refresh(watch)
+
+    if should_send_opening_alert:
+        send_pending_notifications(watch_id=watch.id)
 
     log_event(
         "verify",

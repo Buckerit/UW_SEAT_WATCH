@@ -14,15 +14,20 @@ from app.services.notifications import send_opening_alert
 logger = logging.getLogger(__name__)
 
 
-def send_pending_notifications() -> int:
+def send_pending_notifications(watch_id: int | None = None) -> int:
     sent_count = 0
 
     with SessionLocal() as db:
-        notifications = db.scalars(
+        query = (
             select(Notification)
             .where(Notification.sent_at.is_(None))
             .order_by(Notification.created_at)
-        ).all()
+        )
+
+        if watch_id is not None:
+            query = query.where(Notification.watch_id == watch_id)
+
+        notifications = db.scalars(query).all()
 
         for notification in notifications:
             watch = db.get(

@@ -168,6 +168,52 @@ def test_verification_queues_alert_for_already_open_watch(route_db) -> None:
     assert notification_count == 1
 
 
+def test_verification_immediately_attempts_open_alert_send(
+    route_db,
+    monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+    watch_id = add_watch(route_db, last_seen_open=True)
+    sent_watch_ids: list[int | None] = []
+
+    with route_db() as db:
+        db.add(
+            SectionState(
+                level="under",
+                term="1269",
+                subject="AFM",
+                catalog_number="101",
+                class_number="3804",
+                section_name="LEC 001",
+                enrollment_capacity=70,
+                enrollment_total=69,
+                waitlist_capacity=0,
+                waitlist_total=0,
+                last_checked_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+
+    def fake_send_pending_notifications(
+        watch_id: int | None = None,
+    ) -> int:
+        sent_watch_ids.append(watch_id)
+        return 1
+
+    monkeypatch.setattr(
+        watch_routes,
+        "send_pending_notifications",
+        fake_send_pending_notifications,
+    )
+
+    token = create_watch_verification_token(watch_id)
+    client = TestClient(app)
+
+    response = client.get(f"/verify?token={token}")
+
+    assert response.status_code == 200
+    assert sent_watch_ids == [watch_id]
+
+
 def test_existing_inactive_watch_resends_verification_email(
     route_db,
     monkeypatch: pytest.MonkeyPatch,

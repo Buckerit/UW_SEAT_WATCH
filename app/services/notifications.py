@@ -133,18 +133,15 @@ def send_opening_alert(
     email_subject = f"{course_label} may have a seat open"
 
     text = f"""
-UW Seat Watch found a possible opening.
+UW Seat Watch found a possible seat opening for {course_label}.
 
 Section: {course_label}
 
-Enrollment:
+Enrollment shown:
 {current_enrollment}/{current_capacity}
 
-Potential available seats:
+Seats showing:
 {available_seats}
-
-Waterloo's public Schedule of Classes currently appears to show
-availability.
 
 This does NOT guarantee enrollment. Reserved seats, prerequisites,
 related components, restrictions, and Quest eligibility may still
@@ -155,27 +152,21 @@ To cancel this watch:
 """.strip()
 
     html = f"""
-    <h2>Possible seat opening</h2>
-
     <p>
-        Section: <strong>{course_label}</strong>
+        UW Seat Watch found a possible seat opening for
+        <strong>{course_label}</strong>.
     </p>
 
     <p>
-        Enrollment:
+        Enrollment shown:
         <strong>
             {current_enrollment}/{current_capacity}
         </strong>
     </p>
 
     <p>
-        Potential available seats:
+        Seats showing:
         <strong>{available_seats}</strong>
-    </p>
-
-    <p>
-        Waterloo's public Schedule of Classes currently appears
-        to show availability.
     </p>
 
     <p>
