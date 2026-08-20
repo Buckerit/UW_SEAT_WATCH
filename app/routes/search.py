@@ -5,6 +5,7 @@ from fastapi import APIRouter, Form, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from app.config import get_settings
 from app.waterloo.client import (
     fetch_course_html,
     fetch_published_term_codes,
@@ -15,6 +16,7 @@ from app.waterloo.parser import parse_course_sections
 router = APIRouter()
 
 templates = Jinja2Templates(directory="app/templates")
+settings = get_settings()
 
 TERM_PATTERN = re.compile(r"^[WSF]\d{2}$")
 SUBJECT_PATTERN = re.compile(r"^[A-Za-z]{2,8}$")
@@ -105,6 +107,28 @@ async def show_search_page(request: Request) -> HTMLResponse:
                 "subject_codes": SUBJECT_CODES,
                 "errors": [],
             },
+    )
+
+
+@router.get("/privacy", response_class=HTMLResponse)
+async def show_privacy_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="privacy.html",
+        context={
+            "contact_email": settings.contact_email,
+        },
+    )
+
+
+@router.get("/contact", response_class=HTMLResponse)
+async def show_contact_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="contact.html",
+        context={
+            "contact_email": settings.contact_email,
+        },
     )
 
 @router.post("/search", response_class=HTMLResponse)

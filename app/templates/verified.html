@@ -11,48 +11,75 @@
     <title>Verification | UW Seat Watch</title>
 
     <link
+        rel="icon"
+        href="{{ url_for('static', path='/icons/favicon.ico') }}"
+    >
+
+    <link
         rel="stylesheet"
         href="{{ url_for('static', path='/app.css') }}"
     >
 </head>
 
 <body>
-    <main class="container">
-        {% if success %}
-            <p class="eyebrow">Verification complete</p>
-            <h1>Watch activated</h1>
+    <header class="site-band">
+        <nav class="site-top" aria-label="Site">
+            <a class="brand" href="/">
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', path='/icons/favicon.ico') }}"
+                    alt=""
+                >
 
-            <section class="warning-box">
-                <strong>{{ message }}</strong>
+                <span>UW Seat Watch</span>
+            </a>
 
-                {% if watch %}
-                    <p>
-                        {{ watch.subject }}
-                        {{ watch.catalog_number }}
-                        — {{ watch.section_name }}
+            <a class="site-link" href="/">
+                Search
+            </a>
+        </nav>
+    </header>
+
+    <main class="container status-page">
+        <section class="status-panel">
+            {% if success %}
+                <p class="eyebrow">Verification complete</p>
+                <h1>Watch activated</h1>
+
+                <section class="warning-box">
+                    <strong>{{ message }}</strong>
+
+                    {% if watch %}
+                        <p>
+                            {{ watch.subject }}
+                            {{ watch.catalog_number }}
+                            &mdash; {{ watch.section_name }}
+                        </p>
+                    {% endif %}
+                </section>
+
+                {% if not already_verified %}
+                    <p class="disclaimer">
+                        UW Seat Watch will now check this section during
+                        scheduled polling periods.
                     </p>
                 {% endif %}
-            </section>
+            {% else %}
+                <p class="eyebrow">Verification failed</p>
+                <h1>Link not accepted</h1>
 
-            {% if not already_verified %}
-                <p>
-                    UW Seat Watch will now check this section during
-                    scheduled polling periods.
-                </p>
+                <section class="error-box">
+                    {{ message }}
+                </section>
             {% endif %}
-        {% else %}
-            <p class="eyebrow">Verification failed</p>
-            <h1>Link not accepted</h1>
 
-            <section class="error-box">
-                {{ message }}
-            </section>
-        {% endif %}
-
-        <a class="back-link" href="/">
-            Search another course
-        </a>
+            <a class="back-link" href="/">
+                Search another course
+            </a>
+        </section>
     </main>
+
+    {% include "_footer.html" %}
 
     {% if success and watch %}
         <script>
@@ -63,4 +90,4 @@
         </script>
     {% endif %}
 </body>
-</html> 
+</html>

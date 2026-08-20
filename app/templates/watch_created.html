@@ -11,62 +11,108 @@
     <title>Watch status | UW Seat Watch</title>
 
     <link
+        rel="icon"
+        href="{{ url_for('static', path='/icons/favicon.ico') }}"
+    >
+
+    <link
         rel="stylesheet"
         href="{{ url_for('static', path='/app.css') }}"
     >
 </head>
 
 <body>
-    <main class="container">
+    <header class="site-band">
+        <nav class="site-top" aria-label="Site">
+            <a class="brand" href="/">
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', path='/icons/favicon.ico') }}"
+                    alt=""
+                >
+
+                <span>UW Seat Watch</span>
+            </a>
+
+            <a class="site-link" href="/">
+                Search
+            </a>
+        </nav>
+    </header>
+
+    <main class="container status-page">
         <a class="back-link" href="/">
-            ← Search another course
+            &larr; Search another course
         </a>
 
-        {% if success %}
-            <p id="watch-eyebrow" class="eyebrow">Watch saved</p>
-            <h1 id="watch-title">Almost done</h1>
+        <section class="status-panel">
+            {% if success %}
+                <p id="watch-eyebrow" class="eyebrow">Watch saved</p>
+                <h1 id="watch-title">Almost done</h1>
 
-            <section class="warning-box">
-                <strong id="watch-message">{{ message }}</strong>
+                <section class="warning-box">
+                    <strong id="watch-message">{{ message }}</strong>
 
-                {% if watch %}
-                    <p>
-                        {{ subject }} {{ catalog_number }}
-                        — {{ watch.section_name }}
-                    </p>
+                    {% if watch %}
+                        <p>
+                            {{ subject }} {{ catalog_number }}
+                            &mdash; {{ watch.section_name }}
+                        </p>
 
-                    <p>
-                        Notification email:
-                        <strong>{{ email }}</strong>
-                    </p>
+                        <p>
+                            Notification email:
+                            <strong>{{ email }}</strong>
+                        </p>
+                    {% endif %}
+
+                </section>
+
+                <p id="watch-disclaimer" class="disclaimer">
+                    Check your inbox. The verification link is only sent
+                    by email, and this watch stays inactive until you use
+                    that link.
+                </p>
+
+                {% if watch and not watch.active %}
+                    <form
+                        class="resend-form"
+                        method="post"
+                        action="/watches/{{ watch.id }}/resend-verification"
+                    >
+                        <input
+                            type="hidden"
+                            name="email"
+                            value="{{ email }}"
+                        >
+
+                        <button type="submit">
+                            Resend verification email
+                        </button>
+
+                        <small>
+                            Up to 3 resends. Please wait 1 minute between
+                            tries.
+                        </small>
+                    </form>
+
+                    {% if resend_message %}
+                        <p class="resend-message">
+                            {{ resend_message }}
+                        </p>
+                    {% endif %}
                 {% endif %}
+            {% else %}
+                <p class="eyebrow">Watch not saved</p>
+                <h1>Something went wrong</h1>
 
-                {% if verification_url %}
-                    <p>
-                        Development verification link:
-                    </p>
-
-                    <p>
-                        <a href="{{ verification_url }}">
-                            Verify and activate this watch
-                        </a>
-                    </p>
-                {% endif %}
-            </section>
-
-            <p id="watch-disclaimer" class="disclaimer">
-                Check your inbox for the verification email.
-                This watch remains inactive until it is verified.
-            </p>
-        {% else %}
-            <p class="eyebrow">Watch not saved</p>
-            <h1>Something went wrong</h1>
-
-            <section class="error-box">
-                {{ message }}
-            </section>
-        {% endif %}
+                <section class="error-box">
+                    {{ message }}
+                </section>
+            {% endif %}
+        </section>
     </main>
+
+    {% include "_footer.html" %}
 
     {% if success and watch %}
         <script>

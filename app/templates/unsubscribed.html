@@ -2,9 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
 
     <title>Unsubscribe | UW Seat Watch</title>
+
+    <link
+        rel="icon"
+        href="{{ url_for('static', path='/icons/favicon.ico') }}"
+    >
 
     <link
         rel="stylesheet"
@@ -13,31 +22,56 @@
 </head>
 
 <body>
-    <main class="container">
-        {% if success %}
-            <p class="eyebrow">Watch updated</p>
-            <h1>Alerts stopped</h1>
+    <header class="site-band">
+        <nav class="site-top" aria-label="Site">
+            <a class="brand" href="/">
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', path='/icons/favicon.ico') }}"
+                    alt=""
+                >
 
-            <section class="warning-box">
-                {{ message }}
+                <span>UW Seat Watch</span>
+            </a>
 
-                {% if watch %}
-                    <p>
-                        {{ watch.subject }}
-                        {{ watch.catalog_number }}
-                        &mdash; {{ watch.section_name }}
-                    </p>
-                {% endif %}
-            </section>
-        {% else %}
-            <h1>Couldn't unsubscribe</h1>
+            <a class="site-link" href="/">
+                Search
+            </a>
+        </nav>
+    </header>
 
-            <section class="error-box">
-                {{ message }}
-            </section>
-        {% endif %}
+    <main class="container status-page">
+        <section class="status-panel">
+            {% if success %}
+                <p class="eyebrow">Watch updated</p>
+                <h1>Alerts stopped</h1>
 
-        <a href="/">Search another course</a>
+                <section class="warning-box">
+                    {{ message }}
+
+                    {% if watch %}
+                        <p>
+                            {{ watch.subject }}
+                            {{ watch.catalog_number }}
+                            &mdash; {{ watch.section_name }}
+                        </p>
+                    {% endif %}
+                </section>
+            {% else %}
+                <p class="eyebrow">Unsubscribe failed</p>
+                <h1>Couldn't unsubscribe</h1>
+
+                <section class="error-box">
+                    {{ message }}
+                </section>
+            {% endif %}
+
+            <a class="back-link" href="/">
+                Search another course
+            </a>
+        </section>
     </main>
+
+    {% include "_footer.html" %}
 </body>
 </html>

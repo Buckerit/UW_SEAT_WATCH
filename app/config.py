@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # SECRET_KEY is allowed to be a placeholder locally, but production must override it.
-    secret_key: str = "ZgJGR5iXY2gYzooY0sEbpxvX767Rl0oNZ2qd_ImTJ2o"
+    secret_key: str = "local-dev-only-change-me"
 
     base_url: str = "http://localhost:8000"
     contact_email: str = "arothe995@gmail.com"

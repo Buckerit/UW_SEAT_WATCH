@@ -10,32 +10,64 @@
     <title>{{ subject }} {{ catalog_number }} | UW Seat Watch</title>
 
     <link
+        rel="icon"
+        href="{{ url_for('static', path='/icons/favicon.ico') }}"
+    >
+
+    <link
         rel="stylesheet"
         href="{{ url_for('static', path='/app.css') }}"
     >
 </head>
 
 <body>
-    <main class="container container-wide">
+    <header class="site-band">
+        <nav class="site-top" aria-label="Site">
+            <a class="brand" href="/">
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', path='/icons/favicon.ico') }}"
+                    alt=""
+                >
+
+                <span>UW Seat Watch</span>
+            </a>
+
+            <a class="site-link" href="/">
+                Search
+            </a>
+        </nav>
+    </header>
+
+    <main class="container container-wide course-board">
         <a class="back-link" href="/">
-            ← Search another course
+            &larr; New search
         </a>
 
-        <header class="page-header">
-            <p class="eyebrow">
-                {{ term_name }}
-            </p>
+        <header class="results-header">
+            <div>
+                <h1>
+                    {{ subject }} {{ catalog_number }}
+                </h1>
+            </div>
 
-            <h1>
-                {{ subject }} {{ catalog_number }}
-            </h1>
+            <div class="results-meta">
+                <p class="results-term">
+                    {{ term_name }}
+                </p>
 
-            <p class="intro">
-                {{ sections | length }} sections found.
-            </p>
+                <p class="results-count">
+                    {{ sections | length }} sections
+                </p>
+            </div>
         </header>
 
-        <form method="post" action="/watches">
+        <form
+            class="sections-form"
+            method="post"
+            action="/watches"
+            novalidate
+        >
             <input
                 type="hidden"
                 name="level"
@@ -72,18 +104,24 @@
                             <th>Available</th>
                             <th>Wait-list</th>
                             <th>Time</th>
-                            <th>Room</th>
                         </tr>
                     </thead>
 
                     <tbody>
                         {% for section in sections %}
-                            <tr>
+                            <tr
+                                class="section-row"
+                                data-section="{{ section.section_number }}"
+                                data-class="{{ section.class_number }}"
+                                data-available="{% if section.appears_open %}{{ section.available_seats }} seats showing{% else %}Full{% endif %}"
+                            >
                                 <td>
                                     <input
+                                        id="section-{{ section.class_number }}"
                                         type="radio"
                                         name="class_number"
                                         value="{{ section.class_number }}"
+                                        data-required-message="Select a section to watch."
                                         required
                                     >
                                 </td>
@@ -99,7 +137,13 @@
                                 </td>
 
                                 <td>
-                                    {{ section.campus_type }}
+                                    {% if section.campus_type == "UW U" %}
+                                        UW
+                                    {% elif section.campus_type == "ONLN ONLINE" %}
+                                        Online
+                                    {% else %}
+                                        {{ section.campus_type }}
+                                    {% endif %}
                                 </td>
 
                                 <td>
@@ -111,7 +155,7 @@
                                 <td>
                                     {% if section.appears_open %}
                                         <span class="status status-open">
-                                            {{ section.available_seats }}
+                                            {{ section.available_seats }} open
                                         </span>
                                     {% else %}
                                         <span class="status status-full">
@@ -127,11 +171,11 @@
                                 </td>
 
                                 <td>
-                                    {{ section.meeting_time or "—" }}
-                                </td>
-
-                                <td>
-                                    {{ section.room or "—" }}
+                                    {% if section.meeting_time %}
+                                        {{ section.meeting_time }}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
                                 </td>
                             </tr>
                         {% endfor %}
@@ -140,39 +184,122 @@
             </div>
 
             <section class="watch-panel">
-                <label for="email">
-                    Email address
-                </label>
+                <p class="selected-summary" data-selected-summary>
+                    <strong>
+                        Selected section:
+                    </strong>
+                    <span class="selected-copy">
+                        Choose a section above
+                    </span>
+                </p>
 
-                <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    maxlength="320"
-                    placeholder="you@example.com"
-                    required
-                >
+                <div class="watch-controls">
+                    <div class="field">
+                        <label for="email">
+                            Email address
+                        </label>
 
-                <button type="submit">
-                    Watch selected section
-                </button>
+                        <input
+                            id="email"
+                            name="email"
+                            type="email"
+                            maxlength="320"
+                            placeholder="you@example.com"
+                            data-required-message="Enter your email address."
+                            required
+                        >
+                    </div>
+
+                    <button type="submit">
+                        Watch this section &rarr;
+                    </button>
+                </div>
 
                 <small>
-                    The watch will remain inactive until the email is
-                    verified.
+                    We'll email you a link to activate the watch.
                 </small>
             </section>
         </form>
 
-        <section class="warning-box">
+        <p class="availability-warning">
             <strong>Availability is not guaranteed.</strong>
+            Reserved seats, prerequisites, related components,
+            restrictions, and Quest eligibility can still prevent
+            enrollment.
+        </p>
 
-            <p>
-                Reserved seats, related components, prerequisites,
-                restrictions, and Quest eligibility may prevent
-                enrollment even when capacity appears available.
-            </p>
-        </section>
     </main>
+
+    {% include "_footer.html" %}
+
+    <script>
+        const rows = document.querySelectorAll(".section-row");
+        const selectedCopy = document.querySelector("[data-selected-summary] .selected-copy");
+
+        function updateSelectedSection(row) {
+            rows.forEach((otherRow) => {
+                otherRow.classList.toggle("is-selected", otherRow === row);
+            });
+
+            selectedCopy.textContent = `${row.dataset.section} \u00b7 Class ${row.dataset.class} \u00b7 ${row.dataset.available}`;
+        }
+
+        rows.forEach((row) => {
+            const radio = row.querySelector("input[type='radio']");
+
+            row.addEventListener("click", () => {
+                radio.checked = true;
+                updateSelectedSection(row);
+            });
+
+            radio.addEventListener("change", () => {
+                updateSelectedSection(row);
+            });
+        });
+
+        function clearFormErrors(form) {
+            form.querySelectorAll(".inline-error").forEach((error) => {
+                error.remove();
+            });
+
+            form.querySelectorAll("[aria-invalid='true']").forEach((field) => {
+                field.removeAttribute("aria-invalid");
+            });
+        }
+
+        function showInlineError(target, message) {
+            const error = document.createElement("small");
+            error.className = "inline-error";
+            error.textContent = message;
+            target.insertAdjacentElement("afterend", error);
+        }
+
+        document.querySelector(".sections-form").addEventListener("submit", (event) => {
+            const form = event.currentTarget;
+            const selectedClass = form.querySelector("input[name='class_number']:checked");
+            const email = form.querySelector("#email");
+
+            clearFormErrors(form);
+
+            if (!selectedClass) {
+                event.preventDefault();
+                showInlineError(
+                    document.querySelector(".table-wrapper"),
+                    "Select a section to watch.",
+                );
+                return;
+            }
+
+            if (!email.validity.valid) {
+                event.preventDefault();
+                showInlineError(
+                    email,
+                    email.dataset.requiredMessage || "Enter your email address.",
+                );
+                email.setAttribute("aria-invalid", "true");
+                email.focus();
+            }
+        });
+    </script>
 </body>
 </html>

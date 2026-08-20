@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>Contact | UW Seat Watch</title>
+
+    <link
+        rel="icon"
+        href="{{ url_for('static', path='/icons/favicon.ico') }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='/app.css') }}"
+    >
+</head>
+
+<body>
+    <header class="site-band">
+        <nav class="site-top" aria-label="Site">
+            <a class="brand" href="/">
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', path='/icons/favicon.ico') }}"
+                    alt=""
+                >
+
+                <span>UW Seat Watch</span>
+            </a>
+
+            <a class="site-link" href="/">
+                Search
+            </a>
+        </nav>
+    </header>
+
+    <main class="container text-page">
+        <p class="eyebrow">Contact</p>
+        <h1>Contact</h1>
+
+        <p>
+            For questions, bug reports, privacy requests, or takedown
+            requests, email
+            <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+        </p>
+
+        <p>
+            You can also view the project on
+            <a href="https://github.com/Buckerit/UW_SEAT_WATCH">GitHub</a>.
+        </p>
+    </main>
+
+    {% include "_footer.html" %}
+</body>
+</html>

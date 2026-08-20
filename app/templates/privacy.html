@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>Privacy | UW Seat Watch</title>
+
+    <link
+        rel="icon"
+        href="{{ url_for('static', path='/icons/favicon.ico') }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='/app.css') }}"
+    >
+</head>
+
+<body>
+    <header class="site-band">
+        <nav class="site-top" aria-label="Site">
+            <a class="brand" href="/">
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', path='/icons/favicon.ico') }}"
+                    alt=""
+                >
+
+                <span>UW Seat Watch</span>
+            </a>
+
+            <a class="site-link" href="/">
+                Search
+            </a>
+        </nav>
+    </header>
+
+    <main class="container text-page">
+        <p class="eyebrow">Privacy</p>
+        <h1>Privacy</h1>
+
+        <p>
+            UW Seat Watch collects the email address you provide and
+            the course section you choose to watch.
+        </p>
+
+        <p>
+            That information is used to verify your email address, send
+            requested seat alerts, and manage unsubscribe requests.
+        </p>
+
+        <p>
+            Email delivery is handled through Brevo. UW Seat Watch does
+            not sell your email address or use it for newsletters.
+        </p>
+
+        <p>
+            You can unsubscribe from a watch using the unsubscribe link
+            in any watch email. For privacy questions, email
+            <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+        </p>
+    </main>
+
+    {% include "_footer.html" %}
+</body>
+</html>

@@ -10,147 +10,258 @@
     <title>UW Seat Watch</title>
 
     <link
+        rel="icon"
+        href="{{ url_for('static', path='/icons/favicon.ico') }}"
+    >
+
+    <link
         rel="stylesheet"
         href="{{ url_for('static', path='/app.css') }}"
     >
 </head>
 
 <body>
-    <main class="container">
-        <header class="page-header">
-            <p class="eyebrow">University of Waterloo</p>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a class="brand" href="/">
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', path='/icons/favicon.ico') }}"
+                    alt=""
+                >
+
+                <span>UW Seat Watch</span>
+            </a>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <section class="hero">
+            <p class="eyebrow">Unofficial Waterloo student tool</p>
+
             <h1>UW Seat Watch</h1>
 
             <p class="intro">
-                Search Waterloo's public Schedule of Classes and
-                check current section enrollment.
+                Stop refreshing Quest. Pick a section and we'll keep
+                an eye on it.
             </p>
-        </header>
+        </section>
 
-        {% if errors %}
-            <section class="error-box" aria-label="Search errors">
-                <strong>We couldn't complete that search.</strong>
+        <section class="search-panel">
+            {% if errors %}
+                <section class="error-box form-error" aria-label="Search errors">
+                    <strong>We couldn't complete that search.</strong>
 
-                <ul>
-                    {% for error in errors %}
-                        <li>{{ error }}</li>
-                    {% endfor %}
-                </ul>
-            </section>
-        {% endif %}
+                    <ul>
+                        {% for error in errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </section>
+            {% endif %}
 
-        <form
-            id="search-form"
-            class="search-form"
-            method="post"
-            action="/search"
-        >
-            <div class="field">
-                <label for="level">Level</label>
+            <form
+                id="search-form"
+                class="search-form"
+                method="post"
+                action="/search"
+                novalidate
+            >
+                <div class="field field-level">
+                    <label for="level">Level</label>
 
-                <select id="level" name="level" required>
-                    <option
-                        value="under"
-                        {% if values.level == "under" %}selected{% endif %}
-                    >
-                        Undergraduate
-                    </option>
-
-                    <option
-                        value="grad"
-                        {% if values.level == "grad" %}selected{% endif %}
-                    >
-                        Graduate
-                    </option>
-                </select>
-            </div>
-
-            <div class="field">
-                <label for="term">Term</label>
-
-                <input
-                    id="term"
-                    name="term"
-                    type="text"
-                    value="{{ values.term }}"
-                    maxlength="3"
-                    placeholder="F26"
-                    autocomplete="off"
-                    required
-                >
-
-                <small>
-                    Format: W27, S27, or F27
-                </small>
-            </div>
-
-            <div class="field">
-                <label for="subject">Subject</label>
-
-                <input
-                    id="subject"
-                    name="subject"
-                    type="text"
-                    value="{{ values.subject }}"
-                    list="subject-codes"
-                    maxlength="8"
-                    autocomplete="off"
-                    aria-describedby="subject-no-match"
-                    required
-                >
-
-                <datalist id="subject-codes">
-                    {% for subject_code in subject_codes %}
+                    <select id="level" name="level" required>
                         <option
-                            value="{{ subject_code }}"
-                        ></option>
-                    {% endfor %}
-                </datalist>
+                            value="under"
+                            {% if values.level == "under" %}selected{% endif %}
+                        >
+                            Undergraduate
+                        </option>
 
-                <small id="subject-no-match" class="no-match" hidden>
-                    No course code matches
-                </small>
-            </div>
+                        <option
+                            value="grad"
+                            {% if values.level == "grad" %}selected{% endif %}
+                        >
+                            Graduate
+                        </option>
+                    </select>
+                </div>
 
-            <div class="field">
-                <label for="catalog_number">Course number</label>
+                <div class="search-fields">
+                    <div class="field field-term">
+                        <label for="term">Term</label>
 
-                <input
-                    id="catalog_number"
-                    name="catalog_number"
-                    type="text"
-                    value="{{ values.catalog_number }}"
-                    maxlength="16"
+                        <input
+                            id="term"
+                            name="term"
+                            type="text"
+                            value="{{ values.term }}"
+                            maxlength="3"
+                            placeholder="F26"
+                    autocomplete="off"
+                    aria-describedby="term-hint"
+                    data-required-message="Enter a term like F26."
+                    required
+                >
+                    </div>
+
+                    <div class="field field-subject">
+                        <label for="subject">Subject</label>
+
+                        <input
+                            id="subject"
+                            name="subject"
+                            type="text"
+                            value="{{ values.subject }}"
+                            maxlength="8"
+                            autocomplete="off"
+                    aria-autocomplete="list"
+                    aria-expanded="false"
+                    aria-describedby="subject-no-match"
+                    data-required-message="Choose a Waterloo subject."
+                    required
+                >
+
+                        <div id="subject-menu" class="subject-menu" hidden></div>
+
+                        <small id="subject-no-match" class="no-match" hidden>
+                            No course code matches
+                        </small>
+                    </div>
+
+                    <div class="field field-course">
+                        <label for="catalog_number">Course number</label>
+
+                        <input
+                            id="catalog_number"
+                            name="catalog_number"
+                            type="text"
+                            value="{{ values.catalog_number }}"
+                            maxlength="16"
                     placeholder="101"
                     autocomplete="off"
+                    data-required-message="Enter a course number."
                     required
                 >
+                    </div>
+                </div>
+
+                <small id="term-hint" class="field-hint">
+                    Use W27, S27, or F27
+                </small>
+
+                <button
+                    id="search-button"
+                    class="primary-button"
+                    type="submit"
+                >
+                    Find sections →
+                </button>
+            </form>
+
+            <div class="data-note">
+                <span class="status-dot" aria-hidden="true"></span>
+                Waterloo public schedule data · refreshes roughly every
+                30 minutes
             </div>
-
-            <button id="search-button" type="submit">
-                Search sections
-            </button>
-        </form>
-
-        <p class="disclaimer">
-            Enrollment values come from Waterloo's public Schedule
-            of Classes. An apparent opening does not guarantee that
-            you are eligible to enroll.
-        </p>
+        </section>
     </main>
+
+    {% include "_footer.html" %}
 
     <script>
         const subjectInput = document.querySelector("#subject");
+        const subjectMenu = document.querySelector("#subject-menu");
         const subjectNoMatch = document.querySelector("#subject-no-match");
         const subjectCodes = {{ subject_codes | tojson }};
 
-        subjectInput.addEventListener("input", () => {
+        function matchingSubjectCodes() {
             const value = subjectInput.value.trim().toUpperCase();
             subjectInput.value = value;
-            subjectNoMatch.hidden = value === "" || subjectCodes.some((code) => code.startsWith(value));
+            return subjectCodes.filter((code) => code.startsWith(value));
+        }
+
+        function renderSubjectMenu() {
+            const matches = matchingSubjectCodes();
+            subjectMenu.innerHTML = "";
+            subjectNoMatch.hidden = subjectInput.value === "" || matches.length > 0;
+            subjectMenu.hidden = subjectInput.value !== "" && matches.length === 0;
+            subjectInput.setAttribute("aria-expanded", String(!subjectMenu.hidden));
+
+            if (subjectMenu.hidden) {
+                return;
+            }
+
+            matches.slice(0, 12).forEach((code) => {
+                const option = document.createElement("button");
+                option.type = "button";
+                option.className = "subject-option";
+                option.textContent = code;
+
+                option.addEventListener("click", () => {
+                    subjectInput.value = code;
+                    subjectMenu.hidden = true;
+                    subjectNoMatch.hidden = true;
+                    subjectInput.setAttribute("aria-expanded", "false");
+                    subjectInput.focus();
+                });
+
+                subjectMenu.append(option);
+            });
+        }
+
+        subjectInput.addEventListener("focus", renderSubjectMenu);
+        subjectInput.addEventListener("input", renderSubjectMenu);
+
+        document.addEventListener("click", (event) => {
+            if (!subjectInput.contains(event.target) && !subjectMenu.contains(event.target)) {
+                subjectMenu.hidden = true;
+                subjectInput.setAttribute("aria-expanded", "false");
+            }
         });
 
-        document.querySelector("#search-form").addEventListener("submit", () => {
+        function clearFieldError(field) {
+            const existingError = field.parentElement.querySelector(".inline-error");
+            if (existingError) {
+                existingError.remove();
+            }
+
+            field.removeAttribute("aria-invalid");
+        }
+
+        function showFieldError(field, message) {
+            clearFieldError(field);
+
+            const error = document.createElement("small");
+            error.className = "inline-error";
+            error.textContent = message;
+            field.parentElement.append(error);
+            field.setAttribute("aria-invalid", "true");
+        }
+
+        document.querySelector("#search-form").addEventListener("submit", (event) => {
+            const form = event.currentTarget;
+            const fields = form.querySelectorAll("[required]");
+            let firstInvalidField = null;
+
+            fields.forEach((field) => {
+                clearFieldError(field);
+
+                if (!field.validity.valid && firstInvalidField === null) {
+                    firstInvalidField = field;
+                }
+            });
+
+            if (firstInvalidField) {
+                event.preventDefault();
+                showFieldError(
+                    firstInvalidField,
+                    firstInvalidField.dataset.requiredMessage || "Check this field.",
+                );
+                firstInvalidField.focus();
+                return;
+            }
+
             const button = document.querySelector("#search-button");
             button.disabled = true;
             button.textContent = "Searching...";

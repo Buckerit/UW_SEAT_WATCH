@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.responses import HTMLResponse
@@ -17,8 +18,6 @@ from app.waterloo.client import WaterlooClientError, fetch_course_html
 from app.waterloo.parser import parse_course_sections
 
 from fastapi.templating import Jinja2Templates
-
-from datetime import datetime, timezone
 
 from app.services.notifications import send_watch_verification_email
 
@@ -38,12 +37,42 @@ EMAIL_PATTERN = re.compile(
     r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 )
 
+MAX_VERIFICATION_RESENDS = 3
+VERIFICATION_RESEND_COOLDOWN = timedelta(minutes=1)
+
 
 def development_verification_url(verification_url: str) -> str | None:
     if get_settings().app_env.lower() in {"local", "development"}:
         return verification_url
 
     return None
+
+
+def aware_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+
+    return value.astimezone(timezone.utc)
+
+
+def send_and_mark_verification_email(
+    db: Session,
+    watch: Watch,
+) -> str:
+    verification_url = send_watch_verification_email(
+        watch_id=watch.id,
+        email=watch.subscriber.email,
+        subject=watch.subject,
+        catalog_number=watch.catalog_number,
+        section_name=watch.section_name,
+    )
+    watch.verification_email_sent_at = utc_now()
+    db.commit()
+    db.refresh(watch)
+    return verification_url
 
 
 def save_section_baseline(
@@ -248,12 +277,9 @@ async def create_watch(
             db.commit()
             db.refresh(existing_watch)
 
-            verification_url = send_watch_verification_email(
-                watch_id=existing_watch.id,
-                email=subscriber.email,
-                subject=existing_watch.subject,
-                catalog_number=existing_watch.catalog_number,
-                section_name=existing_watch.section_name,
+            verification_url = send_and_mark_verification_email(
+                db,
+                existing_watch,
             )
 
             return templates.TemplateResponse(
@@ -317,12 +343,9 @@ async def create_watch(
     try:
         db.commit()
         db.refresh(watch)
-        verification_url = send_watch_verification_email(
-            watch_id=watch.id,
-            email=subscriber.email,
-            subject=watch.subject,
-            catalog_number=watch.catalog_number,
-            section_name=watch.section_name,
+        verification_url = send_and_mark_verification_email(
+            db,
+            watch,
         )
 
     except IntegrityError:
@@ -358,6 +381,122 @@ async def create_watch(
             ),
         },
         status_code=status.HTTP_201_CREATED,
+    )
+
+
+@router.post(
+    "/watches/{watch_id}/resend-verification",
+    response_class=HTMLResponse,
+)
+def resend_watch_verification(
+    request: Request,
+    watch_id: int,
+    email: str = Form(...),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    normalized_email = email.strip().lower()
+    watch = db.get(Watch, watch_id)
+
+    if watch is None or watch.subscriber.email != normalized_email:
+        return templates.TemplateResponse(
+            request=request,
+            name="watch_created.html",
+            context={
+                "success": False,
+                "message": "That pending watch could not be found.",
+            },
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    if watch.active:
+        return templates.TemplateResponse(
+            request=request,
+            name="watch_created.html",
+            context={
+                "success": True,
+                "message": "This watch is already active.",
+                "watch": watch,
+                "email": watch.subscriber.email,
+                "subject": watch.subject,
+                "catalog_number": watch.catalog_number,
+            },
+        )
+
+    if watch.verification_resend_count >= MAX_VERIFICATION_RESENDS:
+        return templates.TemplateResponse(
+            request=request,
+            name="watch_created.html",
+            context={
+                "success": True,
+                "message": (
+                    "This watch is still pending email verification."
+                ),
+                "resend_message": (
+                    "You've used all 3 verification resends for this watch."
+                ),
+                "watch": watch,
+                "email": watch.subscriber.email,
+                "subject": watch.subject,
+                "catalog_number": watch.catalog_number,
+            },
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    last_sent_at = aware_utc(watch.verification_email_sent_at)
+    now = utc_now()
+
+    if (
+        last_sent_at is not None
+        and now - last_sent_at < VERIFICATION_RESEND_COOLDOWN
+    ):
+        seconds_left = int(
+            (
+                VERIFICATION_RESEND_COOLDOWN
+                - (now - last_sent_at)
+            ).total_seconds()
+        )
+
+        return templates.TemplateResponse(
+            request=request,
+            name="watch_created.html",
+            context={
+                "success": True,
+                "message": (
+                    "This watch is still pending email verification."
+                ),
+                "resend_message": (
+                    f"Wait about {max(seconds_left, 1)} seconds before "
+                    "resending."
+                ),
+                "watch": watch,
+                "email": watch.subscriber.email,
+                "subject": watch.subject,
+                "catalog_number": watch.catalog_number,
+            },
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    watch.verification_resend_count += 1
+    verification_url = send_and_mark_verification_email(db, watch)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="watch_created.html",
+        context={
+            "success": True,
+            "message": "We sent another verification email.",
+            "resend_message": (
+                f"Resend {watch.verification_resend_count} of "
+                f"{MAX_VERIFICATION_RESENDS} used."
+            ),
+            "watch": watch,
+            "email": watch.subscriber.email,
+            "subject": watch.subject,
+            "catalog_number": watch.catalog_number,
+            "verification_url": development_verification_url(
+                verification_url
+            ),
+        },
     )
 
 @router.get("/verify", response_class=HTMLResponse)
