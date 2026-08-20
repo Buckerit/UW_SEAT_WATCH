@@ -53,5 +53,14 @@
             Search another course
         </a>
     </main>
+
+    {% if success and watch %}
+        <script>
+            localStorage.setItem(
+                "uw-seat-watch-verified-{{ watch.id }}",
+                "true",
+            );
+        </script>
+    {% endif %}
 </body>
 </html> 

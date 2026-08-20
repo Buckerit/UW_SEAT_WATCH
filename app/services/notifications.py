@@ -32,37 +32,34 @@ def send_watch_verification_email(
         f"/unsubscribe?token={unsubscribe_token}"
     )
 
-    email_subject = (
-        f"Verify your watch for "
-        f"{subject} {catalog_number} {section_name}"
-    )
+    course_label = f"{subject} {catalog_number} {section_name}"
+
+    email_subject = f"Verify your UW Seat Watch alert for {course_label}"
 
     text = f"""
-Verify your UW Seat Watch
+Verify this UW Seat Watch alert
 
-Course: {subject} {catalog_number}
-Section: {section_name}
+Section: {course_label}
 
-Activate your watch:
+Verify and activate:
 {verification_url}
 
-Stop watching:
+To cancel this watch:
 {unsubscribe_url}
 
 If you did not request this watch, you can ignore this email.
 """.strip()
 
     html = f"""
-    <h2>Verify your UW Seat Watch</h2>
+    <h2>Verify this UW Seat Watch alert</h2>
 
     <p>
-        <strong>{subject} {catalog_number}</strong>
-        &mdash; {section_name}
+        Section: <strong>{course_label}</strong>
     </p>
 
     <p>
         <a href="{verification_url}">
-            Activate this watch
+            Verify and activate
         </a>
     </p>
 
@@ -73,7 +70,7 @@ If you did not request this watch, you can ignore this email.
 
     <p>
         <a href="{unsubscribe_url}">
-            Stop watching this section
+            Cancel this watch
         </a>
     </p>
     """
@@ -112,16 +109,14 @@ def send_opening_alert(
         0,
     )
 
-    email_subject = (
-        f"Potential seat available - "
-        f"{subject} {catalog_number} {section_name}"
-    )
+    course_label = f"{subject} {catalog_number} {section_name}"
+
+    email_subject = f"{course_label} may have a seat open"
 
     text = f"""
-Potential seat availability detected.
+UW Seat Watch found a possible opening.
 
-Course: {subject} {catalog_number}
-Section: {section_name}
+Section: {course_label}
 
 Enrollment:
 {current_enrollment}/{current_capacity}
@@ -136,16 +131,15 @@ This does NOT guarantee enrollment. Reserved seats, prerequisites,
 related components, restrictions, and Quest eligibility may still
 prevent registration.
 
-Stop watching:
+To cancel this watch:
 {unsubscribe_url}
 """.strip()
 
     html = f"""
-    <h2>Potential seat available</h2>
+    <h2>Possible seat opening</h2>
 
     <p>
-        <strong>{subject} {catalog_number}</strong>
-        &mdash; {section_name}
+        Section: <strong>{course_label}</strong>
     </p>
 
     <p>
@@ -174,7 +168,7 @@ Stop watching:
 
     <p>
         <a href="{unsubscribe_url}">
-            Stop watching this section
+            Cancel this watch
         </a>
     </p>
     """

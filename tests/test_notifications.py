@@ -37,5 +37,5 @@ def test_verification_email_includes_unsubscribe_link(
     assert "/verify?token=" in verification_url
     assert "/unsubscribe?token=" in sent["text"]
     assert "/unsubscribe?token=" in sent["html"]
-    assert "Stop watching" in sent["text"]
-    assert "Stop watching this section" in sent["html"]
+    assert "To cancel this watch" in sent["text"]
+    assert "Cancel this watch" in sent["html"]

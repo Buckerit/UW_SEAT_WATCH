@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -10,6 +11,11 @@ from app.waterloo.parser import CourseSection
 
 
 logger = logging.getLogger(__name__)
+
+TERM_OPTION_PATTERN = re.compile(
+    r"<option[^>]+value=[\"']?(\d{4})[\"']?",
+    re.IGNORECASE,
+)
 
 
 class WaterlooClientError(RuntimeError):
@@ -76,6 +82,35 @@ async def fetch_course_html(*, level: str, term: str, subject: str, catalog_num:
         raise WaterlooResponseError("Waterloo returned an unexpected response.")
 
     return response.text
+
+
+async def fetch_published_term_codes() -> set[str]:
+    settings = get_settings()
+
+    headers = {
+        "User-Agent": (
+            f"UWSeatWatch/0.1 (course availability notifier; contact: {settings.contact_email})"
+        )
+    }
+
+    try:
+        async with waterloo_bouncer:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.waterloo_request_timeout_seconds),
+                follow_redirects=True,
+            ) as client:
+                response = await client.get(settings.waterloo_schedule_url, headers=headers)
+        response.raise_for_status()
+    except httpx.TimeoutException as exc:
+        raise WaterlooTimeoutError("Waterloo's Schedule of Classes timed out.") from exc
+    except httpx.HTTPStatusError as exc:
+        raise WaterlooResponseError(
+            f"Waterloo returned HTTP {exc.response.status_code}."
+        ) from exc
+    except httpx.RequestError as exc:
+        raise WaterlooClientError("Waterloo's Schedule of Classes could not be reached.") from exc
+
+    return set(TERM_OPTION_PATTERN.findall(response.text))
 
 
 def parse_openapi_sections(data: Any) -> list[CourseSection]:

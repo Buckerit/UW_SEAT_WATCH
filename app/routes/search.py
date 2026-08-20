@@ -5,16 +5,30 @@ from fastapi import APIRouter, Form, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from app.waterloo.client import fetch_course_html, WaterlooClientError
+from app.waterloo.client import (
+    fetch_course_html,
+    fetch_published_term_codes,
+    WaterlooClientError,
+)
 from app.waterloo.parser import parse_course_sections
 
 router = APIRouter()
 
 templates = Jinja2Templates(directory="app/templates")
 
-TERM_PATTERN = re.compile(r"^\d{4}$")
+TERM_PATTERN = re.compile(r"^[WSF]\d{2}$")
 SUBJECT_PATTERN = re.compile(r"^[A-Za-z]{2,8}$")
 CATALOG_PATTERN = re.compile(r"^[A-Za-z0-9-]{1,16}$")
+SEASON_DIGITS = {
+    "W": "1",
+    "S": "5",
+    "F": "9",
+}
+SEASON_NAMES = {
+    "W": "Winter",
+    "S": "Spring",
+    "F": "Fall",
+}
 SUBJECT_CODES = """
 ACINTY ACTSC ACC AE AFM AMATH ANTH APPLS ARABIC ARBUS ARCH ARCHL ARTS ASL ASTRN
 AVIA BASE BE BET BIOL BLKST BME BUS CC CDNST CFM CHE CHEM CHINA CI CIVE CLAS CM
@@ -30,20 +44,48 @@ UNIV UU UX VCULT WATER WIL WKRPT YC
 """.split()
 
 
+def normalize_friendly_term_code(term: str) -> str:
+    return term.strip().upper()
+
+
+def friendly_term_to_waterloo_term(term: str) -> str:
+    normalized_term = normalize_friendly_term_code(term)
+
+    if TERM_PATTERN.fullmatch(normalized_term) is None:
+        raise ValueError("Term must use WYY, SYY, or FYY format.")
+
+    return (
+        f"1{normalized_term[1:]}"
+        f"{SEASON_DIGITS[normalized_term[0]]}"
+    )
+
+
+def friendly_term_name(term: str) -> str:
+    normalized_term = normalize_friendly_term_code(term)
+
+    if TERM_PATTERN.fullmatch(normalized_term) is None:
+        raise ValueError("Term must use WYY, SYY, or FYY format.")
+
+    return (
+        f"{SEASON_NAMES[normalized_term[0]]} "
+        f"20{normalized_term[1:]}"
+    )
+
+
 def get_default_term_code(today: date | None = None) -> str:
     today = today or date.today()
 
     if today.month <= 4:
-        term_suffix = "5"
+        term_season = "S"
         term_year = today.year
     elif today.month <= 8:
-        term_suffix = "9"
+        term_season = "F"
         term_year = today.year
     else:
-        term_suffix = "1"
+        term_season = "W"
         term_year = today.year + 1
 
-    return f"1{term_year % 100:02d}{term_suffix}"
+    return f"{term_season}{term_year % 100:02d}"
 
   
 @router.get("/", response_class=HTMLResponse)
@@ -66,9 +108,9 @@ async def show_search_page(request: Request) -> HTMLResponse:
     )
 
 @router.post("/search", response_class=HTMLResponse)
-async def search_course(request: Request, level: str = Form(...), term: str = Form(...), subject: str = Form(...), catalog_number: str = Form(...)) -> HTMLResponse:
+async def search_course(request: Request, level: str = Form(...), term: str = Form(""), subject: str = Form(...), catalog_number: str = Form(...)) -> HTMLResponse:
     normalized_level = level.strip().lower()
-    normalized_term = term.strip()
+    normalized_term = normalize_friendly_term_code(term)
     normalized_subject = subject.strip().upper()
     normalized_catalog_number = catalog_number.strip().upper()
     
@@ -84,8 +126,13 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
     if normalized_level not in {"under", "grad"}:
         errors.append("Choose undergraduate or graduate.")
 
-    if TERM_PATTERN.fullmatch(normalized_term) is None:
-        errors.append("Term must be a four-digit Waterloo term code.")
+    try:
+        waterloo_term = friendly_term_to_waterloo_term(normalized_term)
+        term_name = friendly_term_name(normalized_term)
+    except ValueError:
+        waterloo_term = ""
+        term_name = normalized_term
+        errors.append("Enter a term in the format W27, S27, or F27.")
 
     if SUBJECT_PATTERN.fullmatch(normalized_subject) is None or normalized_subject not in SUBJECT_CODES:
         errors.append(
@@ -108,12 +155,32 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
             },
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
+
+    try:
+        published_terms = await fetch_published_term_codes()
+    except WaterlooClientError:
+        published_terms = set()
+
+    if published_terms and waterloo_term not in published_terms:
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context={
+                "values": values,
+                "subject_codes": SUBJECT_CODES,
+                "errors": [
+                    f"{term_name} is not currently available in "
+                    "Waterloo's Schedule of Classes."
+                ],
+            },
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
     
     try: 
         html = await fetch_course_html(
             level=normalized_level,
-            catalog_num=catalog_number,
-            term=normalized_term,
+            catalog_num=normalized_catalog_number,
+            term=waterloo_term,
             subject=normalized_subject,
         )
         sections = parse_course_sections(html)
@@ -139,7 +206,9 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
                 "values": values,
                 "subject_codes": SUBJECT_CODES,
                 "errors": [
-                    "No sections were found for that course and term."
+                    f"No sections were found for "
+                    f"{normalized_subject} {normalized_catalog_number} "
+                    f"in {term_name}."
                 ],
             },
             status_code=status.HTTP_404_NOT_FOUND,
@@ -150,7 +219,8 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
         name="results.html",
         context={
             "level": normalized_level,
-            "term": normalized_term,
+            "term": waterloo_term,
+            "term_name": term_name,
             "subject": normalized_subject,
             "catalog_number": normalized_catalog_number,
             "sections": sections,

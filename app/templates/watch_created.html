@@ -23,11 +23,11 @@
         </a>
 
         {% if success %}
-            <p class="eyebrow">Watch saved</p>
-            <h1>Almost done</h1>
+            <p id="watch-eyebrow" class="eyebrow">Watch saved</p>
+            <h1 id="watch-title">Almost done</h1>
 
             <section class="warning-box">
-                <strong>{{ message }}</strong>
+                <strong id="watch-message">{{ message }}</strong>
 
                 {% if watch %}
                     <p>
@@ -54,7 +54,7 @@
                 {% endif %}
             </section>
 
-            <p class="disclaimer">
+            <p id="watch-disclaimer" class="disclaimer">
                 Check your inbox for the verification email.
                 This watch remains inactive until it is verified.
             </p>
@@ -67,5 +67,28 @@
             </section>
         {% endif %}
     </main>
+
+    {% if success and watch %}
+        <script>
+            const watchVerifiedKey = "uw-seat-watch-verified-{{ watch.id }}";
+
+            function showActivatedState() {
+                document.querySelector("#watch-eyebrow").textContent = "Verification complete";
+                document.querySelector("#watch-title").textContent = "Watch activated";
+                document.querySelector("#watch-message").textContent = "Your watch is now active.";
+                document.querySelector("#watch-disclaimer").textContent = "UW Seat Watch will now check this section during scheduled polling periods.";
+            }
+
+            if (localStorage.getItem(watchVerifiedKey) === "true") {
+                showActivatedState();
+            }
+
+            window.addEventListener("storage", (event) => {
+                if (event.key === watchVerifiedKey && event.newValue === "true") {
+                    showActivatedState();
+                }
+            });
+        </script>
+    {% endif %}
 </body>
 </html>
