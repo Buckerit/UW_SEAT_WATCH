@@ -19,11 +19,17 @@ from app.waterloo.parser import parse_course_sections
 
 from fastapi.templating import Jinja2Templates
 
-from app.services.notifications import send_watch_verification_email
+from app.services.notifications import (
+    send_manage_watches_email,
+    send_watch_verification_email,
+)
 
 from app.services.tokens import (
     VerificationTokenError,
     VerificationTokenExpired,
+    create_manage_request_token,
+    read_manage_request_token,
+    read_manage_watches_token,
     read_watch_unsubscribe_token,
     read_watch_verification_token,
 )
@@ -39,6 +45,15 @@ EMAIL_PATTERN = re.compile(
 
 MAX_VERIFICATION_RESENDS = 3
 VERIFICATION_RESEND_COOLDOWN = timedelta(minutes=1)
+MANAGE_LINK_COOLDOWN = timedelta(minutes=1)
+MAX_MANAGE_LINK_RESENDS = 2
+manage_link_requests: dict[str, dict[str, object]] = {}
+
+TERM_SEASONS = {
+    "1": "Winter",
+    "5": "Spring",
+    "9": "Fall",
+}
 
 
 def development_verification_url(verification_url: str) -> str | None:
@@ -56,6 +71,131 @@ def aware_utc(value: datetime | None) -> datetime | None:
         return value.replace(tzinfo=timezone.utc)
 
     return value.astimezone(timezone.utc)
+
+
+def mask_email(email: str) -> str:
+    local, separator, domain = email.partition("@")
+
+    if not separator:
+        return email
+
+    if len(local) <= 1:
+        hidden_local = "*"
+    else:
+        hidden_local = f"{local[0]}***"
+
+    return f"{hidden_local}@{domain}"
+
+
+def term_label(term: str) -> str:
+    if len(term) == 4 and term.startswith("1"):
+        season = TERM_SEASONS.get(term[-1])
+
+        if season is not None:
+            return f"{season} 20{term[1:3]}"
+
+    return term
+
+
+def manage_link_seconds_left(email: str) -> int:
+    now = utc_now()
+    request_state = manage_link_requests.get(email)
+
+    if request_state is None:
+        return 0
+
+    last_requested_at = aware_utc(
+        request_state.get("last_sent_at")
+    )
+
+    if (
+        last_requested_at is not None
+        and now - last_requested_at < MANAGE_LINK_COOLDOWN
+    ):
+        return int(
+            (
+                MANAGE_LINK_COOLDOWN
+                - (now - last_requested_at)
+            ).total_seconds()
+        )
+
+    return 0
+
+
+def manage_resend_count(email: str) -> int:
+    request_state = manage_link_requests.get(email)
+
+    if request_state is None:
+        return 0
+
+    return int(request_state.get("resend_count", 0))
+
+
+def mark_manage_link_sent(email: str, *, is_resend: bool) -> None:
+    request_state = manage_link_requests.setdefault(
+        email,
+        {
+            "last_sent_at": None,
+            "resend_count": 0,
+        },
+    )
+
+    request_state["last_sent_at"] = utc_now()
+
+    if is_resend:
+        request_state["resend_count"] = (
+            int(request_state.get("resend_count", 0)) + 1
+        )
+
+
+def manage_context(
+    *,
+    mode: str,
+    subscriber: Subscriber | None = None,
+    token: str | None = None,
+    email: str = "",
+    resend_token: str | None = None,
+    message: str | None = None,
+    resend_message: str | None = None,
+) -> dict[str, object]:
+    watches = subscriber.watches if subscriber is not None else []
+
+    return {
+        "mode": mode,
+        "subscriber": subscriber,
+        "masked_email": (
+            mask_email(subscriber.email)
+            if subscriber is not None
+            else ""
+        ),
+        "watches": watches,
+        "token": token,
+        "email": email,
+        "resend_token": resend_token,
+        "message": message,
+        "resend_message": resend_message,
+        "term_label": term_label,
+    }
+
+
+def subscriber_from_manage_token(
+    db: Session,
+    token: str,
+) -> Subscriber:
+    subscriber_id, email = read_manage_watches_token(token)
+    subscriber = db.scalar(
+        select(Subscriber).where(
+            Subscriber.id == subscriber_id,
+            Subscriber.email == email,
+        )
+    )
+
+    if subscriber is None:
+        raise VerificationTokenError(
+            "This management link is invalid."
+        )
+
+    return subscriber
 
 
 def send_and_mark_verification_email(
@@ -159,6 +299,246 @@ def queue_opening_notification(db: Session, watch: Watch) -> None:
             kind="section_open",
             payload=json.dumps(payload),
         )
+    )
+
+
+@router.get("/manage", response_class=HTMLResponse)
+def show_manage_request(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="manage.html",
+        context=manage_context(mode="request"),
+    )
+
+
+@router.post("/manage", response_class=HTMLResponse)
+def request_manage_link(
+    request: Request,
+    email: str = Form(...),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    normalized_email = email.strip().lower()
+
+    if (
+        len(normalized_email) > 320
+        or EMAIL_PATTERN.fullmatch(normalized_email) is None
+    ):
+        return templates.TemplateResponse(
+            request=request,
+            name="manage.html",
+            context={
+                **manage_context(mode="request"),
+                "email": normalized_email,
+                "error": "Enter a valid email address.",
+            },
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
+
+    seconds_left = manage_link_seconds_left(normalized_email)
+    subscriber = db.scalar(
+        select(Subscriber).where(Subscriber.email == normalized_email)
+    )
+
+    if seconds_left <= 0:
+        mark_manage_link_sent(normalized_email, is_resend=False)
+
+    if subscriber is not None and seconds_left <= 0:
+        send_manage_watches_email(
+            subscriber_id=subscriber.id,
+            email=subscriber.email,
+        )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="manage.html",
+        context=manage_context(
+            mode="requested",
+            resend_token=create_manage_request_token(normalized_email),
+        ),
+    )
+
+
+@router.post("/manage/resend", response_class=HTMLResponse)
+def resend_manage_link(
+    request: Request,
+    resend_token: str = Form(...),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    try:
+        normalized_email = read_manage_request_token(resend_token)
+
+    except (VerificationTokenError, VerificationTokenExpired):
+        return templates.TemplateResponse(
+            request=request,
+            name="manage.html",
+            context=manage_context(mode="expired"),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if (
+        len(normalized_email) > 320
+        or EMAIL_PATTERN.fullmatch(normalized_email) is None
+    ):
+        return templates.TemplateResponse(
+            request=request,
+            name="manage.html",
+            context={
+                **manage_context(mode="request"),
+                "email": normalized_email,
+                "error": "Enter a valid email address.",
+            },
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
+
+    resend_message = "If that email has watches, another link was sent."
+    status_code = status.HTTP_200_OK
+
+    if manage_resend_count(normalized_email) >= MAX_MANAGE_LINK_RESENDS:
+        resend_message = "You've used both secure-link resends."
+        status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    else:
+        seconds_left = manage_link_seconds_left(normalized_email)
+
+        if seconds_left > 0:
+            resend_message = (
+                f"Wait about {max(seconds_left, 1)} seconds before "
+                "resending."
+            )
+            status_code = status.HTTP_429_TOO_MANY_REQUESTS
+        else:
+            mark_manage_link_sent(normalized_email, is_resend=True)
+            subscriber = db.scalar(
+                select(Subscriber).where(
+                    Subscriber.email == normalized_email
+                )
+            )
+
+            if subscriber is not None:
+                send_manage_watches_email(
+                    subscriber_id=subscriber.id,
+                    email=subscriber.email,
+                )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="manage.html",
+        context=manage_context(
+            mode="requested",
+            resend_token=resend_token,
+            resend_message=resend_message,
+        ),
+        status_code=status_code,
+    )
+
+
+@router.get("/manage/{token}", response_class=HTMLResponse)
+def show_managed_watches(
+    request: Request,
+    token: str,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    try:
+        subscriber = subscriber_from_manage_token(db, token)
+
+    except (VerificationTokenError, VerificationTokenExpired):
+        return templates.TemplateResponse(
+            request=request,
+            name="manage.html",
+            context=manage_context(mode="expired"),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="manage.html",
+        context=manage_context(
+            mode="list",
+            subscriber=subscriber,
+            token=token,
+        ),
+    )
+
+
+@router.post(
+    "/manage/{token}/watches/{watch_id}/remove",
+    response_class=HTMLResponse,
+)
+def remove_managed_watch(
+    request: Request,
+    token: str,
+    watch_id: int,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    try:
+        subscriber = subscriber_from_manage_token(db, token)
+
+    except (VerificationTokenError, VerificationTokenExpired):
+        return templates.TemplateResponse(
+            request=request,
+            name="manage.html",
+            context=manage_context(mode="expired"),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    watch = db.scalar(
+        select(Watch).where(
+            Watch.id == watch_id,
+            Watch.subscriber_id == subscriber.id,
+        )
+    )
+
+    if watch is not None:
+        watch.active = False
+        db.commit()
+        db.refresh(subscriber)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="manage.html",
+        context=manage_context(
+            mode="list",
+            subscriber=subscriber,
+            token=token,
+            message="Watch removed.",
+        ),
+    )
+
+
+@router.post(
+    "/manage/{token}/watches/stop-all",
+    response_class=HTMLResponse,
+)
+def stop_all_managed_watches(
+    request: Request,
+    token: str,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    try:
+        subscriber = subscriber_from_manage_token(db, token)
+
+    except (VerificationTokenError, VerificationTokenExpired):
+        return templates.TemplateResponse(
+            request=request,
+            name="manage.html",
+            context=manage_context(mode="expired"),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    for watch in subscriber.watches:
+        watch.active = False
+
+    db.commit()
+    db.refresh(subscriber)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="manage.html",
+        context=manage_context(
+            mode="list",
+            subscriber=subscriber,
+            token=token,
+            message="All watches stopped.",
+        ),
     )
 
 

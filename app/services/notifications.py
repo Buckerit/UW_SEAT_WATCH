@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.config import get_settings
 from app.services.email import send_email
 from app.services.tokens import (
+    create_manage_watches_token,
     create_watch_unsubscribe_token,
     create_watch_verification_token,
 )
@@ -179,3 +180,64 @@ To cancel this watch:
         html=html,
         text=text,
     )
+
+
+def send_manage_watches_email(
+    *,
+    subscriber_id: int,
+    email: str,
+) -> str:
+    settings = get_settings()
+
+    token = create_manage_watches_token(
+        subscriber_id=subscriber_id,
+        email=email,
+    )
+
+    manage_url = (
+        f"{settings.base_url.rstrip('/')}"
+        f"/manage/{token}"
+    )
+
+    text = f"""
+Someone requested a link to manage the UW Seat Watch watches associated with this email.
+
+Manage my watches:
+{manage_url}
+
+This link expires shortly.
+
+If you did not request this, you can ignore this email.
+""".strip()
+
+    html = f"""
+    <h2>Manage your UW Seat Watch watches</h2>
+
+    <p>
+        Someone requested a link to manage the UW Seat Watch
+        watches associated with this email.
+    </p>
+
+    <p>
+        <a href="{manage_url}">
+            Manage my watches
+        </a>
+    </p>
+
+    <p>
+        This link expires shortly.
+    </p>
+
+    <p>
+        If you did not request this, you can ignore this email.
+    </p>
+    """
+
+    send_email(
+        to=email,
+        subject="Manage your UW Seat Watch watches",
+        html=html,
+        text=text,
+    )
+
+    return manage_url

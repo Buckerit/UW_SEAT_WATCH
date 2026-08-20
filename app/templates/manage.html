@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>Manage watches | UW Seat Watch</title>
+
+    <link
+        rel="icon"
+        href="{{ url_for('static', path='/icons/favicon2.ico') }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', path='/app.css') }}?v=20260820-mobile"
+    >
+</head>
+
+<body>
+    <header class="site-band">
+        <nav class="site-top" aria-label="Site">
+            <a class="brand" href="/">
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', path='/icons/favicon2.ico') }}"
+                    alt=""
+                >
+
+                <span>UW Seat Watch</span>
+            </a>
+
+            <a class="site-link" href="/">
+                Search
+            </a>
+        </nav>
+    </header>
+
+    <main class="container manage-page">
+        {% if mode == "request" %}
+            <p class="eyebrow">Manage watches</p>
+            <h1>Manage your watches</h1>
+
+            <p class="manage-copy">
+                Enter the email you used when creating your watch.
+            </p>
+
+            <form class="manage-form" method="post" action="/manage">
+                <label for="email">Email address</label>
+
+                <div class="manage-row">
+                    <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        maxlength="320"
+                        placeholder="you@example.com"
+                        value="{{ email or '' }}"
+                        required
+                    >
+
+                    <button type="submit">
+                        Email me a secure link -&gt;
+                    </button>
+                </div>
+
+                {% if error %}
+                    <p class="field-error">{{ error }}</p>
+                {% endif %}
+
+                <p class="field-help">
+                    We'll send you a private link to view or remove your
+                    watches.
+                </p>
+            </form>
+        {% elif mode == "requested" %}
+            <p class="eyebrow">Check your email</p>
+            <h1>Check your email</h1>
+
+            <p class="manage-copy">
+                If that email has watches with UW Seat Watch, we sent a
+                secure management link.
+            </p>
+
+            {% if resend_token %}
+                <form
+                    class="resend-form manage-resend-form"
+                    method="post"
+                    action="/manage/resend"
+                >
+                    <input
+                        type="hidden"
+                        name="resend_token"
+                        value="{{ resend_token }}"
+                    >
+
+                    <button type="submit">
+                        Resend secure link
+                    </button>
+
+                    <small>
+                        Up to 2 resends. Please wait 1 minute between
+                        tries.
+                    </small>
+                </form>
+
+                {% if resend_message %}
+                    <p class="resend-message">
+                        {{ resend_message }}
+                    </p>
+                {% endif %}
+            {% endif %}
+
+            <a class="back-link" href="/">
+                Search another course/section
+            </a>
+        {% elif mode == "expired" %}
+            <p class="eyebrow">Link expired</p>
+            <h1>This link has expired</h1>
+
+            <p class="manage-copy">
+                For your privacy, management links only work for a limited
+                time.
+            </p>
+
+            <a class="button-link" href="/manage">
+                Request a new link
+            </a>
+        {% elif mode == "list" %}
+            <p class="eyebrow">Your watches</p>
+            <h1>Your watches</h1>
+
+            <p class="manage-copy">
+                Watches for:
+                <strong>{{ masked_email }}</strong>
+            </p>
+
+            {% if message %}
+                <p class="manage-message">{{ message }}</p>
+            {% endif %}
+
+            {% if watches %}
+                <ul class="watch-list">
+                    {% for watch in watches %}
+                        <li class="watch-list-item">
+                            <div>
+                                <strong>
+                                    {{ watch.subject }}
+                                    {{ watch.catalog_number }}
+                                </strong>
+
+                                <span>
+                                    {{ watch.section_name }}
+                                    &middot;
+                                    {{ term_label(watch.term) }}
+                                    &middot;
+                                    {% if watch.active %}
+                                        Active
+                                    {% else %}
+                                        Pending or stopped
+                                    {% endif %}
+                                </span>
+                            </div>
+
+                            <form
+                                method="post"
+                                action="/manage/{{ token }}/watches/{{ watch.id }}/remove"
+                            >
+                                <button class="button-danger" type="submit">
+                                    Remove
+                                </button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                </ul>
+
+                <form
+                    class="stop-all-form"
+                    method="post"
+                    action="/manage/{{ token }}/watches/stop-all"
+                >
+                    <button class="button-danger button-danger-wide" type="submit">
+                        Stop all watches
+                    </button>
+                </form>
+            {% else %}
+                <p class="manage-copy">
+                    There are no watches to manage.
+                </p>
+            {% endif %}
+        {% endif %}
+    </main>
+
+    {% include "_footer.html" %}
+</body>
+</html>

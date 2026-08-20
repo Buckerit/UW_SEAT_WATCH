@@ -5,7 +5,10 @@ from app.config import get_settings
 
 VERIFY_WATCH_SALT = "verify-watch-v1"
 UNSUBSCRIBE_WATCH_SALT = "unsubscribe-watch-v1"
+MANAGE_WATCHES_SALT = "manage-watches-v1"
+MANAGE_REQUEST_SALT = "manage-request-v1"
 VERIFY_TOKEN_MAX_AGE_SECONDS = 3600  # 1 hour
+MANAGE_TOKEN_MAX_AGE_SECONDS = 600  # 10 minutes
 
 
 class VerificationTokenError(ValueError):
@@ -102,3 +105,95 @@ def read_watch_unsubscribe_token(token: str) -> int:
         )
 
     return watch_id
+
+
+def create_manage_watches_token(
+    *,
+    subscriber_id: int,
+    email: str,
+) -> str:
+    return _serializer().dumps(
+        {
+            "purpose": "manage_watches",
+            "subscriber_id": subscriber_id,
+            "email": email,
+        },
+        salt=MANAGE_WATCHES_SALT,
+    )
+
+
+def read_manage_watches_token(token: str) -> tuple[int, str]:
+    try:
+        data = _serializer().loads(
+            token,
+            salt=MANAGE_WATCHES_SALT,
+            max_age=MANAGE_TOKEN_MAX_AGE_SECONDS,
+        )
+
+    except SignatureExpired as exc:
+        raise VerificationTokenExpired(
+            "This management link has expired."
+        ) from exc
+
+    except BadSignature as exc:
+        raise VerificationTokenError(
+            "This management link is invalid."
+        ) from exc
+
+    if data.get("purpose") != "manage_watches":
+        raise VerificationTokenError(
+            "This management link has the wrong purpose."
+        )
+
+    subscriber_id = data.get("subscriber_id")
+    email = data.get("email")
+
+    if not isinstance(subscriber_id, int) or not isinstance(email, str):
+        raise VerificationTokenError(
+            "This management link is malformed."
+        )
+
+    return subscriber_id, email
+
+
+def create_manage_request_token(email: str) -> str:
+    return _serializer().dumps(
+        {
+            "purpose": "manage_request",
+            "email": email,
+        },
+        salt=MANAGE_REQUEST_SALT,
+    )
+
+
+def read_manage_request_token(token: str) -> str:
+    try:
+        data = _serializer().loads(
+            token,
+            salt=MANAGE_REQUEST_SALT,
+            max_age=MANAGE_TOKEN_MAX_AGE_SECONDS,
+        )
+
+    except SignatureExpired as exc:
+        raise VerificationTokenExpired(
+            "This resend link has expired."
+        ) from exc
+
+    except BadSignature as exc:
+        raise VerificationTokenError(
+            "This resend link is invalid."
+        ) from exc
+
+    if data.get("purpose") != "manage_request":
+        raise VerificationTokenError(
+            "This resend link has the wrong purpose."
+        )
+
+    email = data.get("email")
+
+    if not isinstance(email, str):
+        raise VerificationTokenError(
+            "This resend link is malformed."
+        )
+
+    return email
