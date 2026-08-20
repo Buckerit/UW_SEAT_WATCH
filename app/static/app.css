@@ -983,3 +983,122 @@ button:hover {
 .course-board .availability-warning strong {
     color: var(--gold);
 }
+
+/* Final mobile fixes. Keep this after theme overrides so phones use it. */
+@media (max-width: 640px) {
+    body {
+        overflow-x: hidden;
+    }
+
+    .site-header__inner,
+    .site-top,
+    .page-shell,
+    .site-footer__inner,
+    .container,
+    .container-wide,
+    .course-board,
+    .status-page {
+        width: min(100% - 28px, 1120px);
+    }
+
+    .site-header__inner,
+    .site-top {
+        min-height: 64px;
+    }
+
+    .brand {
+        min-width: 0;
+        gap: 10px;
+    }
+
+    .brand-logo {
+        width: 38px;
+        height: 38px;
+    }
+
+    h1,
+    .status-panel h1 {
+        font-size: clamp(2.25rem, 12vw, 3.2rem);
+        line-height: 1;
+        letter-spacing: 0;
+    }
+
+    .hero {
+        padding: 42px 0 24px;
+    }
+
+    .search-panel {
+        padding-top: 24px;
+    }
+
+    .search-fields,
+    .watch-controls {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .search-fields > *,
+    .field-level,
+    .field-course,
+    .primary-button,
+    button {
+        width: 100%;
+        max-width: none;
+    }
+
+    .field-hint,
+    .data-note,
+    .availability-warning,
+    .selected-summary {
+        white-space: normal;
+    }
+
+    .subject-menu {
+        width: 100%;
+        max-height: 240px;
+    }
+
+    .course-board {
+        margin-top: 24px;
+        margin-bottom: 24px;
+        padding: 24px 0 18px;
+    }
+
+    .results-header {
+        display: block;
+        margin-bottom: 18px;
+    }
+
+    .results-meta {
+        margin-top: 8px;
+        text-align: left;
+    }
+
+    .table-wrapper {
+        margin-inline: -14px;
+        border-right: 0;
+        border-left: 0;
+        border-radius: 0;
+    }
+
+    th,
+    td {
+        padding: 12px 14px;
+    }
+
+    .watch-panel {
+        margin-top: 22px;
+    }
+
+    .status-panel {
+        padding: 24px 18px;
+    }
+
+    .resend-form {
+        display: grid;
+    }
+
+    .footer-links {
+        gap: 10px 14px;
+    }
+}
