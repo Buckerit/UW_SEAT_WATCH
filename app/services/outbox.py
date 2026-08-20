@@ -96,6 +96,7 @@ def send_pending_notifications() -> int:
                 continue
 
             notification.sent_at = utc_now()
+            watch.last_notified_at = notification.sent_at
             notification.attempt_count += 1
             notification.last_error = None
 

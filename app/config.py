@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # SECRET_KEY is allowed to be a placeholder locally, but production must override it.
     secret_key: str = "ZgJGR5iXY2gYzooY0sEbpxvX767Rl0oNZ2qd_ImTJ2o"
 
-    base_url: str = "http://127.0.0.1:8000"
+    base_url: str = "http://localhost:8000"
     contact_email: str = "arothe995@gmail.com"
 
     database_url: str = "sqlite:///./uw_seat_watch.db"
@@ -21,12 +21,14 @@ class Settings(BaseSettings):
     waterloo_max_concurrent_requests: int = Field(default=2, ge=1, le=5) #max requests to UW_SERVER
 
     email_backend: str = "console"
-    resend_api_key: str | None = None
+    brevo_api_key: str | None = None
     from_email: str = "UW Seat Watch <alerts@example.com>"
 
     waterloo_schedule_url: str = (
         "https://classes.uwaterloo.ca/cgi-bin/cgiwrap/infocour/salook.pl"
     )
+    waterloo_openapi_base_url: str = "https://openapi.data.uwaterloo.ca/v3"
+    uw_openapi_key: str | None = None
     waterloo_request_timeout_seconds: float = Field(default=15.0, gt=0)
 
     scheduler_enabled: bool = False

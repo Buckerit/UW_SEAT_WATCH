@@ -131,6 +131,12 @@ class Watch(Base):
         nullable=True,
     )
 
+    last_seen_open: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,

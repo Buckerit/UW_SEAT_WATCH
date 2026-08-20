@@ -10,7 +10,11 @@ from sqlalchemy.orm import joinedload
 
 from app.database import SessionLocal
 from app.models import Notification, SectionState, Watch, utc_now
-from app.waterloo.client import WaterlooClientError, fetch_course_html
+from app.waterloo.client import (
+    WaterlooClientError,
+    fetch_course_html,
+    fetch_openapi_sections,
+)
 from app.waterloo.parser import parse_course_sections
 
 
@@ -95,9 +99,11 @@ def _load_active_watches() -> dict[CourseKey, list[WatchTarget]]:
     return grouped
 
 
-async def poll_all_watches() -> PollSummary:
-    grouped_watches = _load_active_watches()
-
+async def _poll_grouped_watches(
+    grouped_watches: dict[CourseKey, list[WatchTarget]],
+    *,
+    source: str,
+) -> PollSummary:
     active_watch_count = sum(
         len(watches)
         for watches in grouped_watches.values()
@@ -110,30 +116,38 @@ async def poll_all_watches() -> PollSummary:
     missing_sections = 0
 
     logger.info(
-        "Starting polling cycle: %s active watches across %s courses",
+        "Starting %s polling cycle: %s active watches across %s courses",
+        source,
         active_watch_count,
         len(grouped_watches),
     )
 
     for course, targets in grouped_watches.items():
         try:
-            html = await fetch_course_html(
-                level=course.level,
-                term=course.term,
-                subject=course.subject,
-                catalog_num=course.catalog_number,
-            )
-
-            parsed_sections = parse_course_sections(html)
+            if source == "openapi":
+                parsed_sections = await fetch_openapi_sections(
+                    term=course.term,
+                    subject=course.subject,
+                    catalog_num=course.catalog_number,
+                )
+            else:
+                html = await fetch_course_html(
+                    level=course.level,
+                    term=course.term,
+                    subject=course.subject,
+                    catalog_num=course.catalog_number,
+                )
+                parsed_sections = parse_course_sections(html)
 
         except WaterlooClientError:
             failed_courses += 1
 
             logger.exception(
-                "Could not fetch %s %s for term %s",
+                "Could not fetch %s %s for term %s from %s",
                 course.subject,
                 course.catalog_number,
                 course.term,
+                source,
             )
 
             continue
@@ -269,6 +283,12 @@ async def poll_all_watches() -> PollSummary:
                 )
                 previous_state.last_checked_at = checked_at
 
+                if not is_now_open:
+                    for target in section_targets:
+                        watch = db.get(Watch, target.watch_id)
+                        if watch is not None:
+                            watch.last_seen_open = False
+
                 if was_full and is_now_open:
                     for target in section_targets:
                         payload = {
@@ -295,6 +315,10 @@ async def poll_all_watches() -> PollSummary:
                                 payload=json.dumps(payload),
                             )
                         )
+
+                        watch = db.get(Watch, target.watch_id)
+                        if watch is not None:
+                            watch.last_seen_open = True
 
                         opening_events.append(
                             OpeningEvent(
@@ -328,9 +352,10 @@ async def poll_all_watches() -> PollSummary:
 
                     logger.info(
                         (
-                            "Opening detected for %s %s %s: "
+                            "%s opening detected for %s %s %s: "
                             "%s/%s -> %s/%s"
                         ),
+                        source,
                         course.subject,
                         course.catalog_number,
                         current_section.section_number,
@@ -353,9 +378,10 @@ async def poll_all_watches() -> PollSummary:
 
     logger.info(
         (
-            "Polling complete: successful=%s failed=%s "
+            "%s polling complete: successful=%s failed=%s "
             "missing_sections=%s opening_events=%s"
         ),
+        source,
         summary.successful_courses,
         summary.failed_courses,
         summary.missing_sections,
@@ -363,3 +389,17 @@ async def poll_all_watches() -> PollSummary:
     )
 
     return summary
+
+
+async def poll_all_watches() -> PollSummary:
+    return await _poll_grouped_watches(
+        _load_active_watches(),
+        source="salook",
+    )
+
+
+async def poll_all_watches_openapi() -> PollSummary:
+    return await _poll_grouped_watches(
+        _load_active_watches(),
+        source="openapi",
+    )

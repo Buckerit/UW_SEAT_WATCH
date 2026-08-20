@@ -188,7 +188,7 @@ Use:
 - Alembic for migrations if it can be added without excessive complexity
 - APScheduler for scheduled polling
 - itsdangerous or another safe signed-token mechanism
-- Resend for email delivery
+- Brevo for email delivery
 - pytest
 - Docker
 
@@ -442,7 +442,7 @@ For local development, create an email backend abstraction.
 
 Provide:
 
-- A Resend email implementation
+- A Brevo email implementation
 - A development implementation that logs email contents and links to the console
 
 This lets us test the complete flow without buying a domain or sending real email during early development.
@@ -586,7 +586,7 @@ DATABASE_URL
 BASE_URL
 CONTACT_EMAIL
 EMAIL_BACKEND
-RESEND_API_KEY
+BREVO_API_KEY
 FROM_EMAIL
 WATERLOO_REQUEST_TIMEOUT_SECONDS
 POLL_MINUTES

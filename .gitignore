@@ -11,3 +11,8 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 .vscode/
+
+data/
+*.db
+*.db-wal
+*.db-shm

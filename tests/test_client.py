@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 import httpx
 import pytest
@@ -85,6 +86,37 @@ class ErrorStatusAsyncClient:
         return httpx.Response(500, request=request, text="server error")
 
 
+class RateLimitAsyncClient:
+    def __init__(self, *, timeout: httpx.Timeout, follow_redirects: bool) -> None:
+        self.timeout = timeout
+        self.follow_redirects = follow_redirects
+
+    async def __aenter__(self) -> "RateLimitAsyncClient":
+        return self
+
+    async def __aexit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        return None
+
+    async def post(
+        self,
+        url: str,
+        *,
+        data: dict[str, str],
+        headers: dict[str, str],
+    ) -> httpx.Response:
+        request = httpx.Request("POST", url)
+        return httpx.Response(429, request=request, text="too many requests")
+
+    async def get(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+    ) -> httpx.Response:
+        request = httpx.Request("GET", url)
+        return httpx.Response(429, request=request, text="too many requests")
+
+
 class UnexpectedHtmlAsyncClient:
     def __init__(self, *, timeout: httpx.Timeout, follow_redirects: bool) -> None:
         self.timeout = timeout
@@ -166,6 +198,26 @@ def test_fetch_course_html_converts_http_status_to_app_error(
         )
 
 
+def test_fetch_course_html_logs_rate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(waterloo_client.httpx, "AsyncClient", RateLimitAsyncClient)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(waterloo_client.WaterlooResponseError):
+            asyncio.run(
+                waterloo_client.fetch_course_html(
+                    level="under",
+                    term="1269",
+                    subject="AFM",
+                    catalog_num="101",
+                )
+            )
+
+    assert "salook.pl rate limit hit" in caplog.text
+
+
 def test_fetch_course_html_rejects_unexpected_html(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(waterloo_client.httpx, "AsyncClient", UnexpectedHtmlAsyncClient)
 
@@ -178,3 +230,55 @@ def test_fetch_course_html_rejects_unexpected_html(monkeypatch: pytest.MonkeyPat
                 catalog_num="101",
             )
         )
+
+
+def test_parse_openapi_sections_converts_class_schedule_items() -> None:
+    sections = waterloo_client.parse_openapi_sections(
+        [
+            {
+                "classNumber": 6016,
+                "courseComponent": "LEC",
+                "classSection": 1,
+                "associatedClassCode": 0,
+                "maxEnrollmentCapacity": 250,
+                "enrolledStudents": 232,
+                "scheduleData": [
+                    {
+                        "classMeetingDayPatternCode": "MWF",
+                        "locationName": "UW U",
+                    }
+                ],
+            }
+        ]
+    )
+
+    assert len(sections) == 1
+    assert sections[0].class_number == "6016"
+    assert sections[0].section_number == "LEC 001"
+    assert sections[0].enrollment_capacity == 250
+    assert sections[0].enrollment_total == 232
+    assert sections[0].appears_open is True
+
+
+def test_fetch_openapi_sections_logs_rate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(waterloo_client.httpx, "AsyncClient", RateLimitAsyncClient)
+    monkeypatch.setenv("UW_OPENAPI_KEY", "test-key")
+    waterloo_client.get_settings.cache_clear()
+
+    try:
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(waterloo_client.WaterlooResponseError):
+                asyncio.run(
+                    waterloo_client.fetch_openapi_sections(
+                        term="1269",
+                        subject="STAT",
+                        catalog_num="230",
+                    )
+                )
+
+        assert "OpenData API rate limit hit" in caplog.text
+    finally:
+        waterloo_client.get_settings.cache_clear()

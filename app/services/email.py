@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from email.utils import parseaddr
 import logging
 
-import resend
+import httpx
 
 from app.config import get_settings
 
@@ -36,28 +37,47 @@ def send_email(
 
         return
 
-    if settings.email_backend == "resend":
-        if not settings.resend_api_key:
+    if settings.email_backend == "brevo":
+        if not settings.brevo_api_key:
             raise EmailDeliveryError(
-                "RESEND_API_KEY is missing."
+                "BREVO_API_KEY is missing."
             )
 
-        resend.api_key = settings.resend_api_key
+        sender_name, sender_email = parseaddr(settings.from_email)
+
+        if not sender_email:
+            raise EmailDeliveryError(
+                "FROM_EMAIL must contain a valid sender email."
+            )
 
         try:
-            resend.Emails.send(
-                {
-                    "from": settings.from_email,
-                    "to": [to],
+            response = httpx.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={
+                    "accept": "application/json",
+                    "api-key": settings.brevo_api_key,
+                    "content-type": "application/json",
+                },
+                json={
+                    "sender": {
+                        "name": sender_name or sender_email,
+                        "email": sender_email,
+                    },
+                    "to": [
+                        {
+                            "email": to,
+                        }
+                    ],
                     "subject": subject,
-                    "html": html,
-                    "text": text,
-                }
+                    "htmlContent": html,
+                },
+                timeout=15.0,
             )
+            response.raise_for_status()
 
-        except Exception as exc:
+        except httpx.HTTPError as exc:
             logger.exception(
-                "Resend failed while sending email to %s",
+                "Brevo failed while sending email to %s",
                 to,
             )
 

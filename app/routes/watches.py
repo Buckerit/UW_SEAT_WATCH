@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 
 from fastapi import APIRouter, Depends, Form, Request, status
@@ -10,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Subscriber, Watch
+from app.models import Notification, SectionState, Subscriber, Watch, utc_now
 from app.waterloo.client import WaterlooClientError, fetch_course_html
 from app.waterloo.parser import parse_course_sections
 
@@ -35,6 +36,94 @@ templates = Jinja2Templates(directory="app/templates")
 EMAIL_PATTERN = re.compile(
     r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 )
+
+
+def save_section_baseline(
+    db: Session,
+    *,
+    level: str,
+    term: str,
+    subject: str,
+    catalog_number: str,
+    section,
+) -> None:
+    """Store the current section state so future polling sees changes."""
+    checked_at = utc_now()
+
+    state = db.scalar(
+        select(SectionState).where(
+            SectionState.term == term,
+            SectionState.class_number == section.class_number,
+        )
+    )
+
+    if state is None:
+        state = SectionState(
+            level=level,
+            term=term,
+            subject=subject,
+            catalog_number=catalog_number,
+            class_number=section.class_number,
+            section_name=section.section_number,
+            enrollment_capacity=section.enrollment_capacity,
+            enrollment_total=section.enrollment_total,
+            waitlist_capacity=section.waitlist_capacity,
+            waitlist_total=section.waitlist_total,
+            last_checked_at=checked_at,
+        )
+        db.add(state)
+        return
+
+    state.level = level
+    state.subject = subject
+    state.catalog_number = catalog_number
+    state.section_name = section.section_number
+    state.enrollment_capacity = section.enrollment_capacity
+    state.enrollment_total = section.enrollment_total
+    state.waitlist_capacity = section.waitlist_capacity
+    state.waitlist_total = section.waitlist_total
+    state.last_checked_at = checked_at
+
+
+def queue_opening_notification(db: Session, watch: Watch) -> None:
+    """Queue one alert email for the outbox worker to send."""
+    state = db.scalar(
+        select(SectionState).where(
+            SectionState.term == watch.term,
+            SectionState.class_number == watch.class_number,
+        )
+    )
+
+    current_capacity = (
+        state.enrollment_capacity
+        if state is not None
+        else 0
+    )
+    current_enrollment = (
+        state.enrollment_total
+        if state is not None
+        else 0
+    )
+
+    payload = {
+        "email": watch.subscriber.email,
+        "term": watch.term,
+        "subject": watch.subject,
+        "catalog_number": watch.catalog_number,
+        "class_number": watch.class_number,
+        "section_name": watch.section_name,
+        "current_capacity": current_capacity,
+        "current_enrollment": current_enrollment,
+    }
+
+    db.add(
+        Notification(
+            watch_id=watch.id,
+            kind="section_open",
+            payload=json.dumps(payload),
+        )
+    )
+
 
 @router.post("/watches", response_class=HTMLResponse)
 async def create_watch(
@@ -166,9 +255,18 @@ async def create_watch(
         class_number=selected_section.class_number,
         section_name=selected_section.section_number,
         active=False,
+        last_seen_open=selected_section.appears_open,
     )
     
     subscriber.watches.append(watch)
+    save_section_baseline(
+        db,
+        level=normalized_level,
+        term=normalized_term,
+        subject=normalized_subject,
+        catalog_number=normalized_catalog_number,
+        section=selected_section,
+    )
 
     try:
         db.commit()
@@ -273,6 +371,9 @@ def verify_watch(request: Request, token: str, db: Session = Depends(get_db)) ->
 
     if watch.subscriber.verified_at is None:
         watch.subscriber.verified_at = verified_at
+
+    if watch.last_seen_open and watch.last_notified_at is None:
+        queue_opening_notification(db, watch)
 
     db.commit()
     db.refresh(watch)
