@@ -207,4 +207,11 @@ async def fetch_openapi_sections(
     except httpx.RequestError as exc:
         raise WaterlooClientError("Waterloo OpenData could not be reached.") from exc
 
-    return parse_openapi_sections(response.json())
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise WaterlooResponseError(
+            "Waterloo OpenData returned invalid JSON."
+        ) from exc
+
+    return parse_openapi_sections(data)

@@ -139,6 +139,27 @@ class UnexpectedHtmlAsyncClient:
         return httpx.Response(200, request=request, text="<html>not a schedule page</html>")
 
 
+class InvalidJsonAsyncClient:
+    def __init__(self, *, timeout: httpx.Timeout, follow_redirects: bool) -> None:
+        self.timeout = timeout
+        self.follow_redirects = follow_redirects
+
+    async def __aenter__(self) -> "InvalidJsonAsyncClient":
+        return self
+
+    async def __aexit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        return None
+
+    async def get(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+    ) -> httpx.Response:
+        request = httpx.Request("GET", url)
+        return httpx.Response(200, request=request, text="not json")
+
+
 def test_fetch_course_html_posts_expected_form_data(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(waterloo_client.httpx, "AsyncClient", FakeAsyncClient)
 
@@ -280,5 +301,25 @@ def test_fetch_openapi_sections_logs_rate_limit(
                 )
 
         assert "OpenData API rate limit hit" in caplog.text
+    finally:
+        waterloo_client.get_settings.cache_clear()
+
+
+def test_fetch_openapi_sections_wraps_invalid_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(waterloo_client.httpx, "AsyncClient", InvalidJsonAsyncClient)
+    monkeypatch.setenv("UW_OPENAPI_KEY", "test-key")
+    waterloo_client.get_settings.cache_clear()
+
+    try:
+        with pytest.raises(waterloo_client.WaterlooResponseError):
+            asyncio.run(
+                waterloo_client.fetch_openapi_sections(
+                    term="1269",
+                    subject="STAT",
+                    catalog_num="230",
+                )
+            )
     finally:
         waterloo_client.get_settings.cache_clear()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -480,6 +481,140 @@ async def test_waterloo_failure_is_safe_for_one_course(
     assert afm_state is not None
     assert afm_state.enrollment_total == 70
     assert afm_state.enrollment_capacity == 70
+
+
+@pytest.mark.anyio
+async def test_unexpected_parser_failure_is_safe_for_one_course(
+    polling_db,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch(**kwargs: str) -> str:
+        return kwargs["subject"]
+
+    def fake_parse(html: str) -> list[CourseSection]:
+        if html == "AFM":
+            raise RuntimeError("parser exploded")
+
+        return [
+            make_section(
+                class_number="9999",
+                section_number="LEC 001",
+                enrollment_total=69,
+            )
+        ]
+
+    monkeypatch.setattr(polling, "fetch_course_html", fake_fetch)
+    monkeypatch.setattr(polling, "parse_course_sections", fake_parse)
+
+    with polling_db() as db:
+        add_watch(db, email="afm@example.com")
+        add_state(db, enrollment_total=70, enrollment_capacity=70)
+        add_watch(
+            db,
+            email="cs@example.com",
+            subject="CS",
+            catalog_number="246",
+            class_number="9999",
+        )
+        add_state(
+            db,
+            subject="CS",
+            catalog_number="246",
+            class_number="9999",
+            enrollment_total=70,
+            enrollment_capacity=70,
+        )
+
+    summary = await polling.poll_all_watches()
+
+    with polling_db() as db:
+        afm_state = db.scalar(
+            select(SectionState).where(SectionState.subject == "AFM")
+        )
+        notifications = db.scalars(select(Notification)).all()
+
+    assert summary.failed_courses == 1
+    assert summary.successful_courses == 1
+    assert len(summary.opening_events) == 1
+    assert afm_state is not None
+    assert afm_state.enrollment_total == 70
+    assert afm_state.enrollment_capacity == 70
+    assert len(notifications) == 1
+    assert json.loads(notifications[0].payload)["subject"] == "CS"
+
+
+@pytest.mark.anyio
+async def test_unexpected_processing_failure_does_not_update_or_alert(
+    polling_db,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch(**kwargs: str) -> str:
+        return kwargs["subject"]
+
+    def bad_section() -> CourseSection:
+        return CourseSection(
+            class_number="3804",
+            section_number="LEC 001",
+            campus_type="UW U",
+            associated_class="1",
+            enrollment_capacity="bad",  # type: ignore[arg-type]
+            enrollment_total=69,
+            waitlist_capacity=0,
+            waitlist_total=0,
+            meeting_time="02:30-03:50W",
+            room="",
+        )
+
+    def fake_parse(html: str) -> list[CourseSection]:
+        if html == "AFM":
+            return [bad_section()]
+
+        return [
+            make_section(
+                class_number="9999",
+                section_number="LEC 001",
+                enrollment_total=69,
+            )
+        ]
+
+    monkeypatch.setattr(polling, "fetch_course_html", fake_fetch)
+    monkeypatch.setattr(polling, "parse_course_sections", fake_parse)
+
+    with polling_db() as db:
+        add_watch(db, email="afm@example.com")
+        add_state(db, enrollment_total=70, enrollment_capacity=70)
+        add_watch(
+            db,
+            email="cs@example.com",
+            subject="CS",
+            catalog_number="246",
+            class_number="9999",
+        )
+        add_state(
+            db,
+            subject="CS",
+            catalog_number="246",
+            class_number="9999",
+            enrollment_total=70,
+            enrollment_capacity=70,
+        )
+
+    summary = await polling.poll_all_watches()
+
+    with polling_db() as db:
+        afm_state = db.scalar(
+            select(SectionState).where(SectionState.subject == "AFM")
+        )
+        notifications = db.scalars(select(Notification)).all()
+
+    assert summary.failed_courses == 1
+    assert summary.successful_courses == 1
+    assert len(summary.opening_events) == 1
+    assert afm_state is not None
+    assert afm_state.enrollment_total == 70
+    assert afm_state.enrollment_capacity == 70
+    assert len(notifications) == 1
+    assert json.loads(notifications[0].payload)["subject"] == "CS"
 
 
 @pytest.mark.anyio

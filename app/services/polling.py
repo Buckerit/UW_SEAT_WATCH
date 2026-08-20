@@ -152,220 +152,265 @@ async def _poll_grouped_watches(
 
             continue
 
-        successful_courses += 1
+        except Exception:
+            failed_courses += 1
 
-        sections_by_class_number = {
-            section.class_number: section
-            for section in parsed_sections
-        }
+            logger.exception(
+                (
+                    "Unexpected error while fetching/parsing "
+                    "%s %s for term %s from %s"
+                ),
+                course.subject,
+                course.catalog_number,
+                course.term,
+                source,
+            )
 
-        targets_by_class_number: dict[
-            str,
-            list[WatchTarget],
-        ] = defaultdict(list)
+            continue
 
-        for target in targets:
-            targets_by_class_number[
-                target.class_number
-            ].append(target)
+        try:
+            sections_by_class_number = {
+                section.class_number: section
+                for section in parsed_sections
+            }
 
-        checked_at = utc_now()
+            targets_by_class_number: dict[
+                str,
+                list[WatchTarget],
+            ] = defaultdict(list)
 
-        with SessionLocal() as db:
-            for class_number, section_targets in (
-                targets_by_class_number.items()
-            ):
-                current_section = sections_by_class_number.get(
-                    class_number
-                )
+            for target in targets:
+                targets_by_class_number[
+                    target.class_number
+                ].append(target)
 
-                if current_section is None:
-                    missing_sections += 1
+            checked_at = utc_now()
+            course_opening_events: list[OpeningEvent] = []
+            course_missing_sections = 0
 
-                    logger.warning(
-                        (
-                            "Watched section missing from Waterloo "
-                            "response: term=%s course=%s %s class=%s"
-                        ),
-                        course.term,
-                        course.subject,
-                        course.catalog_number,
-                        class_number,
+            with SessionLocal() as db:
+                for class_number, section_targets in (
+                    targets_by_class_number.items()
+                ):
+                    current_section = sections_by_class_number.get(
+                        class_number
                     )
 
-                    continue
+                    if current_section is None:
+                        course_missing_sections += 1
 
-                previous_state = db.scalar(
-                    select(SectionState).where(
-                        SectionState.term == course.term,
-                        SectionState.class_number
-                        == class_number,
-                    )
-                )
+                        logger.warning(
+                            (
+                                "Watched section missing from Waterloo "
+                                "response: term=%s course=%s %s class=%s"
+                            ),
+                            course.term,
+                            course.subject,
+                            course.catalog_number,
+                            class_number,
+                        )
 
-                if previous_state is None:
-                    db.add(
-                        SectionState(
-                            level=course.level,
-                            term=course.term,
-                            subject=course.subject,
-                            catalog_number=course.catalog_number,
-                            class_number=class_number,
-                            section_name=current_section.section_number,
-                            enrollment_capacity=(
-                                current_section.enrollment_capacity
-                            ),
-                            enrollment_total=(
-                                current_section.enrollment_total
-                            ),
-                            waitlist_capacity=(
-                                current_section.waitlist_capacity
-                            ),
-                            waitlist_total=(
-                                current_section.waitlist_total
-                            ),
-                            last_checked_at=checked_at,
+                        continue
+
+                    previous_state = db.scalar(
+                        select(SectionState).where(
+                            SectionState.term == course.term,
+                            SectionState.class_number
+                            == class_number,
                         )
                     )
 
-                    logger.info(
-                        (
-                            "Stored first observation for "
-                            "%s %s %s: %s/%s"
-                        ),
-                        course.subject,
-                        course.catalog_number,
-                        current_section.section_number,
-                        current_section.enrollment_total,
-                        current_section.enrollment_capacity,
-                    )
-
-                    # First observation establishes the baseline.
-                    # It must never produce an alert.
-                    continue
-
-                was_full = (
-                    previous_state.enrollment_total
-                    >= previous_state.enrollment_capacity
-                )
-
-                is_now_open = (
-                    current_section.enrollment_total
-                    < current_section.enrollment_capacity
-                )
-
-                previous_capacity = (
-                    previous_state.enrollment_capacity
-                )
-                previous_enrollment = (
-                    previous_state.enrollment_total
-                )
-
-                previous_state.level = course.level
-                previous_state.subject = course.subject
-                previous_state.catalog_number = (
-                    course.catalog_number
-                )
-                previous_state.section_name = (
-                    current_section.section_number
-                )
-                previous_state.enrollment_capacity = (
-                    current_section.enrollment_capacity
-                )
-                previous_state.enrollment_total = (
-                    current_section.enrollment_total
-                )
-                previous_state.waitlist_capacity = (
-                    current_section.waitlist_capacity
-                )
-                previous_state.waitlist_total = (
-                    current_section.waitlist_total
-                )
-                previous_state.last_checked_at = checked_at
-
-                if not is_now_open:
-                    for target in section_targets:
-                        watch = db.get(Watch, target.watch_id)
-                        if watch is not None:
-                            watch.last_seen_open = False
-
-                if was_full and is_now_open:
-                    for target in section_targets:
-                        payload = {
-                            "email": target.email,
-                            "term": course.term,
-                            "subject": course.subject,
-                            "catalog_number": course.catalog_number,
-                            "class_number": class_number,
-                            "section_name": current_section.section_number,
-                            "previous_capacity": previous_capacity,
-                            "previous_enrollment": previous_enrollment,
-                            "current_capacity": (
-                                current_section.enrollment_capacity
-                            ),
-                            "current_enrollment": (
-                                current_section.enrollment_total
-                            ),
-                        }
-
+                    if previous_state is None:
                         db.add(
-                            Notification(
-                                watch_id=target.watch_id,
-                                kind="section_open",
-                                payload=json.dumps(payload),
-                            )
-                        )
-
-                        watch = db.get(Watch, target.watch_id)
-                        if watch is not None:
-                            watch.last_seen_open = True
-
-                        opening_events.append(
-                            OpeningEvent(
-                                watch_id=target.watch_id,
-                                email=target.email,
+                            SectionState(
+                                level=course.level,
                                 term=course.term,
                                 subject=course.subject,
-                                catalog_number=(
-                                    course.catalog_number
-                                ),
+                                catalog_number=course.catalog_number,
                                 class_number=class_number,
                                 section_name=(
                                     current_section.section_number
                                 ),
-                                previous_capacity=(
-                                    previous_capacity
+                                enrollment_capacity=(
+                                    current_section.enrollment_capacity
                                 ),
-                                previous_enrollment=(
-                                    previous_enrollment
+                                enrollment_total=(
+                                    current_section.enrollment_total
                                 ),
-                                current_capacity=(
-                                    current_section
-                                    .enrollment_capacity
+                                waitlist_capacity=(
+                                    current_section.waitlist_capacity
                                 ),
-                                current_enrollment=(
-                                    current_section
-                                    .enrollment_total
+                                waitlist_total=(
+                                    current_section.waitlist_total
                                 ),
+                                last_checked_at=checked_at,
                             )
                         )
 
-                    logger.info(
-                        (
-                            "%s opening detected for %s %s %s: "
-                            "%s/%s -> %s/%s"
-                        ),
-                        source,
-                        course.subject,
-                        course.catalog_number,
-                        current_section.section_number,
-                        previous_enrollment,
-                        previous_capacity,
-                        current_section.enrollment_total,
-                        current_section.enrollment_capacity,
+                        logger.info(
+                            (
+                                "Stored first observation for "
+                                "%s %s %s: %s/%s"
+                            ),
+                            course.subject,
+                            course.catalog_number,
+                            current_section.section_number,
+                            current_section.enrollment_total,
+                            current_section.enrollment_capacity,
+                        )
+
+                        # First observation establishes the baseline.
+                        # It must never produce an alert.
+                        continue
+
+                    was_full = (
+                        previous_state.enrollment_total
+                        >= previous_state.enrollment_capacity
                     )
 
-            db.commit()
+                    is_now_open = (
+                        current_section.enrollment_total
+                        < current_section.enrollment_capacity
+                    )
+
+                    previous_capacity = (
+                        previous_state.enrollment_capacity
+                    )
+                    previous_enrollment = (
+                        previous_state.enrollment_total
+                    )
+
+                    previous_state.level = course.level
+                    previous_state.subject = course.subject
+                    previous_state.catalog_number = (
+                        course.catalog_number
+                    )
+                    previous_state.section_name = (
+                        current_section.section_number
+                    )
+                    previous_state.enrollment_capacity = (
+                        current_section.enrollment_capacity
+                    )
+                    previous_state.enrollment_total = (
+                        current_section.enrollment_total
+                    )
+                    previous_state.waitlist_capacity = (
+                        current_section.waitlist_capacity
+                    )
+                    previous_state.waitlist_total = (
+                        current_section.waitlist_total
+                    )
+                    previous_state.last_checked_at = checked_at
+
+                    if not is_now_open:
+                        for target in section_targets:
+                            watch = db.get(Watch, target.watch_id)
+                            if watch is not None:
+                                watch.last_seen_open = False
+
+                    if was_full and is_now_open:
+                        for target in section_targets:
+                            payload = {
+                                "email": target.email,
+                                "term": course.term,
+                                "subject": course.subject,
+                                "catalog_number": (
+                                    course.catalog_number
+                                ),
+                                "class_number": class_number,
+                                "section_name": (
+                                    current_section.section_number
+                                ),
+                                "previous_capacity": previous_capacity,
+                                "previous_enrollment": (
+                                    previous_enrollment
+                                ),
+                                "current_capacity": (
+                                    current_section.enrollment_capacity
+                                ),
+                                "current_enrollment": (
+                                    current_section.enrollment_total
+                                ),
+                            }
+
+                            db.add(
+                                Notification(
+                                    watch_id=target.watch_id,
+                                    kind="section_open",
+                                    payload=json.dumps(payload),
+                                )
+                            )
+
+                            watch = db.get(Watch, target.watch_id)
+                            if watch is not None:
+                                watch.last_seen_open = True
+
+                            course_opening_events.append(
+                                OpeningEvent(
+                                    watch_id=target.watch_id,
+                                    email=target.email,
+                                    term=course.term,
+                                    subject=course.subject,
+                                    catalog_number=(
+                                        course.catalog_number
+                                    ),
+                                    class_number=class_number,
+                                    section_name=(
+                                        current_section.section_number
+                                    ),
+                                    previous_capacity=(
+                                        previous_capacity
+                                    ),
+                                    previous_enrollment=(
+                                        previous_enrollment
+                                    ),
+                                    current_capacity=(
+                                        current_section
+                                        .enrollment_capacity
+                                    ),
+                                    current_enrollment=(
+                                        current_section
+                                        .enrollment_total
+                                    ),
+                                )
+                            )
+
+                        logger.info(
+                            (
+                                "%s opening detected for %s %s %s: "
+                                "%s/%s -> %s/%s"
+                            ),
+                            source,
+                            course.subject,
+                            course.catalog_number,
+                            current_section.section_number,
+                            previous_enrollment,
+                            previous_capacity,
+                            current_section.enrollment_total,
+                            current_section.enrollment_capacity,
+                        )
+
+                db.commit()
+
+            missing_sections += course_missing_sections
+            opening_events.extend(course_opening_events)
+            successful_courses += 1
+
+        except Exception:
+            failed_courses += 1
+
+            logger.exception(
+                (
+                    "Unexpected error while processing "
+                    "%s %s for term %s from %s"
+                ),
+                course.subject,
+                course.catalog_number,
+                course.term,
+                source,
+            )
+
+            continue
 
     summary = PollSummary(
         active_watches=active_watch_count,
