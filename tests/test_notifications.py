@@ -39,6 +39,10 @@ def test_verification_email_includes_unsubscribe_link(
     assert "/unsubscribe?token=" in sent["html"]
     assert "To cancel this watch" in sent["text"]
     assert "Cancel this watch" in sent["html"]
+    assert "spam" not in sent["text"].lower()
+    assert "promotions" not in sent["text"].lower()
+    assert "spam" not in sent["html"].lower()
+    assert "promotions" not in sent["html"].lower()
 
 
 def test_opening_alert_is_plain_and_section_specific(
