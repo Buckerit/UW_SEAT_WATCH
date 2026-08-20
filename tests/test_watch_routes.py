@@ -12,10 +12,13 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db
 from app.main import app
 from app.models import Notification, SectionState, Subscriber, Watch
+from app.routes import watches as watch_routes
+from app.config import get_settings
 from app.services.tokens import (
     create_watch_unsubscribe_token,
     create_watch_verification_token,
 )
+from app.waterloo.parser import CourseSection
 
 
 def create_test_database(tmp_path: Path):
@@ -147,6 +150,137 @@ def test_verification_queues_alert_for_already_open_watch(route_db) -> None:
 
     assert response.status_code == 200
     assert notification_count == 1
+
+
+def test_existing_inactive_watch_resends_verification_email(
+    route_db,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    watch_id = add_watch(route_db, active=False, confirmed=False)
+    sent_watch_ids: list[int] = []
+
+    async def fake_fetch_course_html(**kwargs: str) -> str:
+        return "<html>ok</html>"
+
+    def fake_parse_course_sections(html: str) -> list[CourseSection]:
+        return [
+            CourseSection(
+                class_number="3804",
+                section_number="LEC 001",
+                campus_type="UW U",
+                associated_class="1",
+                enrollment_capacity=70,
+                enrollment_total=70,
+                waitlist_capacity=0,
+                waitlist_total=0,
+                meeting_time="",
+                room="",
+            )
+        ]
+
+    def fake_send_watch_verification_email(**kwargs: object) -> str:
+        sent_watch_ids.append(int(kwargs["watch_id"]))
+        return "https://example.com/verify"
+
+    monkeypatch.setattr(
+        watch_routes,
+        "fetch_course_html",
+        fake_fetch_course_html,
+    )
+    monkeypatch.setattr(
+        watch_routes,
+        "parse_course_sections",
+        fake_parse_course_sections,
+    )
+    monkeypatch.setattr(
+        watch_routes,
+        "send_watch_verification_email",
+        fake_send_watch_verification_email,
+    )
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/watches",
+        data={
+            "level": "under",
+            "term": "1269",
+            "subject": "AFM",
+            "catalog_number": "101",
+            "class_number": "3804",
+            "email": "route@example.com",
+        },
+    )
+
+    assert response.status_code == 200
+    assert sent_watch_ids == [watch_id]
+    assert "fresh verification email" in response.text
+
+
+def test_production_watch_creation_does_not_show_verification_link(
+    route_db,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch_course_html(**kwargs: str) -> str:
+        return "<html>ok</html>"
+
+    def fake_parse_course_sections(html: str) -> list[CourseSection]:
+        return [
+            CourseSection(
+                class_number="3804",
+                section_number="LEC 001",
+                campus_type="UW U",
+                associated_class="1",
+                enrollment_capacity=70,
+                enrollment_total=70,
+                waitlist_capacity=0,
+                waitlist_total=0,
+                meeting_time="",
+                room="",
+            )
+        ]
+
+    def fake_send_watch_verification_email(**kwargs: object) -> str:
+        return "https://example.com/verify?token=secret"
+
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        watch_routes,
+        "fetch_course_html",
+        fake_fetch_course_html,
+    )
+    monkeypatch.setattr(
+        watch_routes,
+        "parse_course_sections",
+        fake_parse_course_sections,
+    )
+    monkeypatch.setattr(
+        watch_routes,
+        "send_watch_verification_email",
+        fake_send_watch_verification_email,
+    )
+
+    try:
+        client = TestClient(app)
+
+        response = client.post(
+            "/watches",
+            data={
+                "level": "under",
+                "term": "1269",
+                "subject": "AFM",
+                "catalog_number": "101",
+                "class_number": "3804",
+                "email": "route@example.com",
+            },
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 201
+    assert "Development verification link" not in response.text
+    assert "verify?token=secret" not in response.text
 
 
 def test_unsubscribe_route_deactivates_watch(route_db) -> None:

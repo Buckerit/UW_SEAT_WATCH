@@ -25,6 +25,13 @@ def send_watch_verification_email(
         f"/verify?token={token}"
     )
 
+    unsubscribe_token = create_watch_unsubscribe_token(watch_id)
+
+    unsubscribe_url = (
+        f"{settings.base_url.rstrip('/')}"
+        f"/unsubscribe?token={unsubscribe_token}"
+    )
+
     email_subject = (
         f"Verify your watch for "
         f"{subject} {catalog_number} {section_name}"
@@ -38,6 +45,9 @@ Section: {section_name}
 
 Activate your watch:
 {verification_url}
+
+Stop watching:
+{unsubscribe_url}
 
 If you did not request this watch, you can ignore this email.
 """.strip()
@@ -59,6 +69,12 @@ If you did not request this watch, you can ignore this email.
     <p>
         If you did not request this watch,
         you can ignore this email.
+    </p>
+
+    <p>
+        <a href="{unsubscribe_url}">
+            Stop watching this section
+        </a>
     </p>
     """
 

@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import Notification, SectionState, Subscriber, Watch, utc_now
 from app.waterloo.client import WaterlooClientError, fetch_course_html
@@ -36,6 +37,13 @@ templates = Jinja2Templates(directory="app/templates")
 EMAIL_PATTERN = re.compile(
     r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 )
+
+
+def development_verification_url(verification_url: str) -> str | None:
+    if get_settings().app_env.lower() in {"local", "development"}:
+        return verification_url
+
+    return None
 
 
 def save_section_baseline(
@@ -227,7 +235,45 @@ async def create_watch(
     )
     
     if existing_watch is not None:
-        db.rollback()
+        if not existing_watch.active:
+            save_section_baseline(
+                db,
+                level=normalized_level,
+                term=normalized_term,
+                subject=normalized_subject,
+                catalog_number=normalized_catalog_number,
+                section=selected_section,
+            )
+            existing_watch.last_seen_open = selected_section.appears_open
+            db.commit()
+            db.refresh(existing_watch)
+
+            verification_url = send_watch_verification_email(
+                watch_id=existing_watch.id,
+                email=subscriber.email,
+                subject=existing_watch.subject,
+                catalog_number=existing_watch.catalog_number,
+                section_name=existing_watch.section_name,
+            )
+
+            return templates.TemplateResponse(
+                request=request,
+                name="watch_created.html",
+                context={
+                    "success": True,
+                    "message": (
+                        "This watch was already pending. We sent "
+                        "you a fresh verification email."
+                    ),
+                    "watch": existing_watch,
+                    "email": normalized_email,
+                    "subject": normalized_subject,
+                    "catalog_number": normalized_catalog_number,
+                    "verification_url": development_verification_url(
+                        verification_url
+                    ),
+                },
+            )
 
         return templates.TemplateResponse(
             request=request,
@@ -235,7 +281,7 @@ async def create_watch(
             context={
                 "success": True,
                 "message": (
-                    f"{normalized_email} already has a watch for "
+                    f"{normalized_email} is already watching "
                     f"{normalized_subject} "
                     f"{normalized_catalog_number} "
                     f"{selected_section.section_number}."
@@ -307,7 +353,9 @@ async def create_watch(
             "email": normalized_email,
             "subject": normalized_subject,
             "catalog_number": normalized_catalog_number,
-            "verification_url": verification_url,
+            "verification_url": development_verification_url(
+                verification_url
+            ),
         },
         status_code=status.HTTP_201_CREATED,
     )
