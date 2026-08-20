@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import date
 import re
 from fastapi import APIRouter, Form, Request, status
 from fastapi.responses import HTMLResponse
@@ -28,16 +29,34 @@ SOC SOCWK SPAN SRF STAT STV SUSM SWK SWREN SYDE TAX THPERF TN TPM TS UN UNDC
 UNIV UU UX VCULT WATER WIL WKRPT YC
 """.split()
 
+
+def get_default_term_code(today: date | None = None) -> str:
+    today = today or date.today()
+
+    if today.month <= 4:
+        term_suffix = "5"
+        term_year = today.year
+    elif today.month <= 8:
+        term_suffix = "9"
+        term_year = today.year
+    else:
+        term_suffix = "1"
+        term_year = today.year + 1
+
+    return f"1{term_year % 100:02d}{term_suffix}"
+
   
 @router.get("/", response_class=HTMLResponse)
 async def show_search_page(request: Request) -> HTMLResponse:
+    term = get_default_term_code()
+
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
                 "values": {
                     "level": "under",
-                    "term": "1269",
+                    "term": term,
                     "subject": "AFM",
                     "catalog_number": "",
                 },

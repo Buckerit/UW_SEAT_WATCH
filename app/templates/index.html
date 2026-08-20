@@ -64,24 +64,11 @@
                 </select>
             </div>
 
-            <div class="field">
-                <label for="term">Term code</label>
-
-                <input
-                    id="term"
-                    name="term"
-                    type="text"
-                    value="{{ values.term }}"
-                    inputmode="numeric"
-                    maxlength="4"
-                    placeholder="1269"
-                    required
-                >
-
-                <small>
-                    Example: 1269
-                </small>
-            </div>
+            <input
+                type="hidden"
+                name="term"
+                value="{{ values.term }}"
+            >
 
             <div class="field">
                 <label for="subject">Subject</label>
