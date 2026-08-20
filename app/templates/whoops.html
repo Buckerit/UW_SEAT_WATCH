@@ -8,7 +8,7 @@
         content="width=device-width, initial-scale=1"
     >
 
-    <title>Contact | UW Seat Watch</title>
+    <title>Whoops | UW Seat Watch</title>
 
     <link
         rel="icon"
@@ -40,20 +40,32 @@
         </nav>
     </header>
 
-    <main class="container text-page">
-        <p class="eyebrow">Contact</p>
-        <h1>Contact</h1>
+    <main class="container status-page">
+        <section class="status-panel whoops-panel">
+            <p class="eyebrow">
+                Error {{ status_code }}
+            </p>
 
-        <p>
-            For questions, bug reports, privacy requests, or takedown
-            requests, email
-            <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
-        </p>
+            <h1>
+                Whoops.
+            </h1>
 
-        <p>
-            You can also view the project on
-            <a href="https://github.com/Buckerit/UW_SEAT_WATCH">GitHub</a>.
-        </p>
+            <section class="warning-box">
+                <strong>
+                    {{ message }}
+                </strong>
+
+                <p>
+                    Please try again in a moment. If this keeps
+                    happening, the site owner can investigate from the
+                    server logs.
+                </p>
+            </section>
+
+            <a class="primary-button" href="/">
+                Back to search &rarr;
+            </a>
+        </section>
     </main>
 
     {% include "_footer.html" %}

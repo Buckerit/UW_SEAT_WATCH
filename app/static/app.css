@@ -750,6 +750,19 @@ table input[type="radio"] {
     font-weight: 700;
 }
 
+.whoops-panel {
+    margin: 0 auto;
+}
+
+.whoops-panel h1 {
+    color: var(--ink);
+}
+
+.whoops-panel .warning-box p {
+    margin: 12px 0 0;
+    color: var(--ink);
+}
+
 /* 12. Responsive media queries */
 @media (max-width: 760px) {
     .search-fields {
