@@ -1055,7 +1055,7 @@ def test_same_watch_can_be_created_after_manage_remove(
     assert watches[0].class_number == "3804"
 
 
-def test_unsubscribe_route_deactivates_watch(route_db) -> None:
+def test_unsubscribe_route_deletes_watch(route_db) -> None:
     watch_id = add_watch(route_db, active=True, confirmed=True)
     token = create_watch_unsubscribe_token(watch_id)
     client = TestClient(app)
@@ -1066,8 +1066,7 @@ def test_unsubscribe_route_deactivates_watch(route_db) -> None:
         watch = db.get(Watch, watch_id)
 
     assert response.status_code == 200
-    assert watch is not None
-    assert watch.active is False
+    assert watch is None
 
 
 def test_unsubscribe_route_rejects_invalid_token(route_db) -> None:
@@ -1079,15 +1078,16 @@ def test_unsubscribe_route_rejects_invalid_token(route_db) -> None:
 
 
 def test_repeated_unsubscribe_is_safe(route_db) -> None:
-    watch_id = add_watch(route_db, active=False, confirmed=True)
+    watch_id = add_watch(route_db, active=True, confirmed=True)
     token = create_watch_unsubscribe_token(watch_id)
     client = TestClient(app)
 
-    response = client.get(f"/unsubscribe?token={token}")
+    first_response = client.get(f"/unsubscribe?token={token}")
+    second_response = client.get(f"/unsubscribe?token={token}")
 
     with route_db() as db:
         watch = db.get(Watch, watch_id)
 
-    assert response.status_code == 200
-    assert watch is not None
-    assert watch.active is False
+    assert first_response.status_code == 200
+    assert second_response.status_code == 404
+    assert watch is None

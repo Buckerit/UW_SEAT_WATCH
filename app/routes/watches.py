@@ -1098,35 +1098,9 @@ def unsubscribe_watch(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    if not watch.active:
-        log_event(
-            "unsubscribe",
-            "already_inactive",
-            email=mask_email(watch.subscriber.email),
-            subject=watch.subject,
-            catalog=watch.catalog_number,
-            section=watch.section_name,
-            class_number=watch.class_number,
-            term=watch.term,
-        )
-
-        return templates.TemplateResponse(
-            request=request,
-            name="unsubscribed.html",
-            context={
-                "success": True,
-                "message": "This watch is already inactive.",
-                "watch": watch,
-            },
-        )
-
-    watch.active = False
-
-    db.commit()
-
     log_event(
         "unsubscribe",
-        "deactivated",
+        "removed",
         email=mask_email(watch.subscriber.email),
         subject=watch.subject,
         catalog=watch.catalog_number,
@@ -1134,6 +1108,9 @@ def unsubscribe_watch(
         class_number=watch.class_number,
         term=watch.term,
     )
+
+    db.delete(watch)
+    db.commit()
 
     return templates.TemplateResponse(
         request=request,
