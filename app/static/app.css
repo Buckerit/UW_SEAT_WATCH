@@ -668,11 +668,38 @@ tbody tr:last-child td {
     display: grid;
     grid-template-columns: minmax(220px, 1fr) auto;
     gap: 14px;
-    align-items: end;
+    align-items: start;
+}
+
+.watch-controls button {
+    margin-top: calc(1.3em + 7px);
 }
 
 .watch-panel small {
     color: #d9ceb0;
+}
+
+.email-delivery-note,
+.inline-warning {
+    display: block;
+    max-width: 620px;
+    font-size: var(--text-sm);
+    line-height: 1.45;
+}
+
+.email-delivery-note {
+    color: #d9ceb0;
+}
+
+.inline-warning {
+    margin-top: 3px;
+    border-left: 3px solid var(--gold);
+    padding-left: 8px;
+    color: var(--paper);
+}
+
+.inline-warning[hidden] {
+    display: none;
 }
 
 table input[type="radio"] {
@@ -692,6 +719,11 @@ table input[type="radio"] {
 .availability-warning strong {
     color: var(--gold);
     font-size: 1.025rem;
+}
+
+.watch-note {
+    max-width: 920px;
+    margin-top: 6px;
 }
 
 .status-page {
@@ -1202,6 +1234,10 @@ button:hover {
     .watch-controls {
         grid-template-columns: 1fr;
         gap: 14px;
+    }
+
+    .watch-controls button {
+        margin-top: 0;
     }
 
     .search-fields > *,

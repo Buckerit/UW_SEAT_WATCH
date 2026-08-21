@@ -399,6 +399,7 @@ def test_pending_watch_resend_has_one_minute_cooldown(
     with route_db() as db:
         watch = db.get(Watch, watch_id)
         assert watch is not None
+        watch.verification_resend_count = 1
         watch.verification_email_sent_at = datetime.now(timezone.utc)
         db.commit()
 
@@ -424,6 +425,49 @@ def test_pending_watch_resend_has_one_minute_cooldown(
     assert response.status_code == 429
     assert sent_watch_ids == []
     assert "Wait about" in response.text
+
+
+def test_first_pending_watch_resend_is_not_blocked_by_original_email(
+    route_db,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    watch_id = add_watch(route_db, active=False, confirmed=False)
+    sent_watch_ids: list[int] = []
+
+    with route_db() as db:
+        watch = db.get(Watch, watch_id)
+        assert watch is not None
+        watch.verification_resend_count = 0
+        watch.verification_email_sent_at = datetime.now(timezone.utc)
+        db.commit()
+
+    def fake_send_watch_verification_email(**kwargs: object) -> str:
+        sent_watch_ids.append(int(kwargs["watch_id"]))
+        return "https://example.com/verify"
+
+    monkeypatch.setattr(
+        watch_routes,
+        "send_watch_verification_email",
+        fake_send_watch_verification_email,
+    )
+
+    client = TestClient(app)
+
+    response = client.post(
+        f"/watches/{watch_id}/resend-verification",
+        data={
+            "email": "route@example.com",
+        },
+    )
+
+    with route_db() as db:
+        watch = db.get(Watch, watch_id)
+
+    assert response.status_code == 200
+    assert sent_watch_ids == [watch_id]
+    assert watch is not None
+    assert watch.verification_resend_count == 1
+    assert "Resend 1 of 3 used" in response.text
 
 
 def test_pending_watch_resend_stops_after_three_tries(

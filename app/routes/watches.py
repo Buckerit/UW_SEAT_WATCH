@@ -900,7 +900,8 @@ def resend_watch_verification(
     now = utc_now()
 
     if (
-        last_sent_at is not None
+        watch.verification_resend_count > 0
+        and last_sent_at is not None
         and now - last_sent_at < VERIFICATION_RESEND_COOLDOWN
     ):
         seconds_left = int(

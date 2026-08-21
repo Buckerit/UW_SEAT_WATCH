@@ -206,8 +206,27 @@
                             maxlength="320"
                             placeholder="you@example.com"
                             data-required-message="Enter your email address."
+                            aria-describedby="email-delivery-note uw-email-warning"
                             required
                         >
+
+                        <small
+                            id="email-delivery-note"
+                            class="email-delivery-note"
+                        >
+                            For reliable delivery, please use a personal
+                            email (Gmail, Outlook, etc.) rather than your
+                            @uwaterloo.ca address.
+                        </small>
+
+                        <small
+                            id="uw-email-warning"
+                            class="inline-warning"
+                            hidden
+                        >
+                            Waterloo may block automated UW Seat Watch
+                            emails. A personal email is recommended.
+                        </small>
                     </div>
 
                     <button type="submit">
@@ -215,18 +234,15 @@
                     </button>
                 </div>
 
-                <small>
+                <p class="availability-warning watch-note">
                     We'll email you a link to activate the watch.
-                </small>
+                    <strong>Availability is not guaranteed.</strong>
+                    Reserved seats, prerequisites, related components,
+                    restrictions, and Quest eligibility can still prevent
+                    enrollment.
+                </p>
             </section>
         </form>
-
-        <p class="availability-warning">
-            <strong>Availability is not guaranteed.</strong>
-            Reserved seats, prerequisites, related components,
-            restrictions, and Quest eligibility can still prevent
-            enrollment.
-        </p>
 
     </main>
 
@@ -300,6 +316,17 @@
                 email.focus();
             }
         });
+
+        const emailInput = document.querySelector("#email");
+        const uwEmailWarning = document.querySelector("#uw-email-warning");
+
+        function updateEmailDeliveryWarning() {
+            const emailValue = emailInput.value.trim().toLowerCase();
+            uwEmailWarning.hidden = !emailValue.endsWith("@uwaterloo.ca");
+        }
+
+        emailInput.addEventListener("input", updateEmailDeliveryWarning);
+        updateEmailDeliveryWarning();
     </script>
 </body>
 </html>
