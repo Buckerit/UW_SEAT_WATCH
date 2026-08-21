@@ -16,7 +16,7 @@
 
     <link
         rel="stylesheet"
-        href="{{ url_for('static', path='/app.css') }}?v=20260820-mobile"
+        href="{{ url_for('static', path='/app.css') }}?v=20260820-results-align"
     >
 </head>
 
@@ -209,7 +209,13 @@
                             aria-describedby="email-delivery-note uw-email-warning"
                             required
                         >
+                    </div>
 
+                    <button type="submit">
+                        Watch this section &rarr;
+                    </button>
+
+                    <div class="email-support">
                         <small
                             id="email-delivery-note"
                             class="email-delivery-note"
@@ -228,10 +234,6 @@
                             emails. A personal email is recommended.
                         </small>
                     </div>
-
-                    <button type="submit">
-                        Watch this section &rarr;
-                    </button>
                 </div>
 
                 <p class="availability-warning watch-note">

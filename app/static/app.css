@@ -675,6 +675,11 @@ tbody tr:last-child td {
     margin-top: calc(1.3em + 7px);
 }
 
+.email-support {
+    grid-column: 1 / 2;
+    margin-top: -6px;
+}
+
 .watch-panel small {
     color: #d9ceb0;
 }
@@ -1238,6 +1243,11 @@ button:hover {
 
     .watch-controls button {
         margin-top: 0;
+    }
+
+    .email-support {
+        grid-column: 1;
+        margin-top: -8px;
     }
 
     .search-fields > *,
