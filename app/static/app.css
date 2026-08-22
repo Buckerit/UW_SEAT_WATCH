@@ -1122,6 +1122,44 @@ button:hover {
     box-shadow: 2px 2px 0 var(--paper);
 }
 
+.watch-email-field .email-domain-popover {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% + 8px);
+    left: 0;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    width: min(480px, 100%);
+    border: 2px solid var(--gold);
+    border-radius: 4px;
+    padding: 10px 12px;
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: 3px 3px 0 var(--gold);
+}
+
+.watch-email-field .email-domain-close,
+.watch-email-field .email-domain-close:hover,
+.watch-email-field .email-domain-close:active {
+    display: inline-flex;
+    width: 28px;
+    min-height: 28px;
+    margin: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--ink);
+    box-shadow: none;
+    font-size: 1.35rem;
+    line-height: 1;
+    transform: none;
+}
+
+.watch-email-field .email-domain-popover[hidden] {
+    display: none;
+}
+
 .site-footer__inner,
 .site-footer p {
     color: var(--paper);
@@ -1266,6 +1304,13 @@ button:hover {
     }
 
     .email-domain-popover {
+        position: static;
+        width: 100%;
+        margin-top: 6px;
+        box-shadow: 2px 2px 0 var(--gold);
+    }
+
+    .watch-email-field .email-domain-popover {
         position: static;
         width: 100%;
         margin-top: 6px;
