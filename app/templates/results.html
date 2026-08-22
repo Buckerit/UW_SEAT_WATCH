@@ -194,7 +194,7 @@
                 </p>
 
                 <div class="watch-controls">
-                    <div class="field">
+                    <div class="field watch-email-field">
                         <label for="email">
                             Email address
                         </label>
@@ -206,34 +206,33 @@
                             maxlength="320"
                             placeholder="you@example.com"
                             data-required-message="Enter your email address."
-                            aria-describedby="email-delivery-note uw-email-warning"
+                            aria-describedby="uw-email-warning"
                             required
                         >
+
+                        <div
+                            id="uw-email-warning"
+                            class="email-domain-popover"
+                            hidden
+                        >
+                            <p>
+                                Waterloo may block automated UW Seat Watch
+                                emails. A personal email is recommended.
+                            </p>
+
+                            <button
+                                type="button"
+                                class="email-domain-close"
+                                aria-label="Dismiss email delivery note"
+                            >
+                                &times;
+                            </button>
+                        </div>
                     </div>
 
                     <button type="submit">
                         Watch this section &rarr;
                     </button>
-
-                    <div class="email-support">
-                        <small
-                            id="email-delivery-note"
-                            class="email-delivery-note"
-                        >
-                            For reliable delivery, please use a personal
-                            email (Gmail, Outlook, etc.) rather than your
-                            @uwaterloo.ca address.
-                        </small>
-
-                        <small
-                            id="uw-email-warning"
-                            class="inline-warning"
-                            hidden
-                        >
-                            Waterloo may block automated UW Seat Watch
-                            emails. A personal email is recommended.
-                        </small>
-                    </div>
                 </div>
 
                 <p class="availability-warning watch-note">
@@ -321,11 +320,27 @@
 
         const emailInput = document.querySelector("#email");
         const uwEmailWarning = document.querySelector("#uw-email-warning");
+        const uwEmailWarningClose = document.querySelector(".email-domain-close");
+        let uwEmailWarningDismissed = false;
 
         function updateEmailDeliveryWarning() {
             const emailValue = emailInput.value.trim().toLowerCase();
-            uwEmailWarning.hidden = !emailValue.endsWith("@uwaterloo.ca");
+            const isWaterlooEmail = emailValue.endsWith("@uwaterloo.ca");
+
+            if (!isWaterlooEmail) {
+                uwEmailWarningDismissed = false;
+            }
+
+            uwEmailWarning.hidden = (
+                !isWaterlooEmail || uwEmailWarningDismissed
+            );
         }
+
+        uwEmailWarningClose.addEventListener("click", () => {
+            uwEmailWarningDismissed = true;
+            uwEmailWarning.hidden = true;
+            emailInput.focus();
+        });
 
         emailInput.addEventListener("input", updateEmailDeliveryWarning);
         updateEmailDeliveryWarning();

@@ -675,35 +675,55 @@ tbody tr:last-child td {
     margin-top: calc(1.3em + 7px);
 }
 
-.email-support {
-    grid-column: 1 / 2;
-    margin-top: -6px;
-}
-
 .watch-panel small {
     color: #d9ceb0;
 }
 
-.email-delivery-note,
-.inline-warning {
-    display: block;
-    max-width: 620px;
+.watch-email-field {
+    position: relative;
+}
+
+.email-domain-popover {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% + 8px);
+    left: 0;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    width: min(480px, 100%);
+    border: 2px solid var(--gold);
+    border-radius: 4px;
+    padding: 10px 12px;
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: 3px 3px 0 var(--gold);
     font-size: var(--text-sm);
-    line-height: 1.45;
+    line-height: 1.4;
 }
 
-.email-delivery-note {
-    color: #d9ceb0;
+.email-domain-popover p {
+    margin: 0;
 }
 
-.inline-warning {
-    margin-top: 3px;
-    border-left: 3px solid var(--gold);
-    padding-left: 8px;
-    color: var(--paper);
+.email-domain-close {
+    width: 28px;
+    min-height: 28px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--ink);
+    box-shadow: none;
+    font-size: 1.35rem;
+    line-height: 1;
 }
 
-.inline-warning[hidden] {
+.email-domain-close:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.email-domain-popover[hidden] {
     display: none;
 }
 
@@ -1245,9 +1265,11 @@ button:hover {
         margin-top: 0;
     }
 
-    .email-support {
-        grid-column: 1;
-        margin-top: -8px;
+    .email-domain-popover {
+        position: static;
+        width: 100%;
+        margin-top: 6px;
+        box-shadow: 2px 2px 0 var(--gold);
     }
 
     .search-fields > *,
