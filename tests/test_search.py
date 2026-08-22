@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routes import search
+from app.services import rate_limiter
 from app.waterloo.parser import CourseSection
 
 
@@ -173,6 +174,70 @@ def test_valid_search_passes_canonical_term_to_waterloo_client(
     assert "Fall 2026" in response.text
     assert 'name="term"' in response.text
     assert 'value="1269"' in response.text
+
+
+def test_search_rate_limit_blocks_before_waterloo_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rate_limiter.search_attempts.clear()
+    fetch_calls = 0
+
+    async def fake_fetch_published_term_codes() -> set[str]:
+        return {"1269"}
+
+    async def fake_fetch_course_html(**kwargs: str) -> str:
+        nonlocal fetch_calls
+        fetch_calls += 1
+        return "<html>ok</html>"
+
+    monkeypatch.setattr(
+        search,
+        "fetch_published_term_codes",
+        fake_fetch_published_term_codes,
+    )
+    monkeypatch.setattr(search, "fetch_course_html", fake_fetch_course_html)
+    monkeypatch.setattr(
+        search,
+        "parse_course_sections",
+        lambda html: [
+            CourseSection(
+                class_number="3804",
+                section_number="LEC 001",
+                campus_type="UW U",
+                associated_class="1",
+                enrollment_capacity=70,
+                enrollment_total=69,
+                waitlist_capacity=0,
+                waitlist_total=0,
+                meeting_time="",
+                room="",
+            )
+        ],
+    )
+
+    client = TestClient(app)
+    data = {
+        "level": "under",
+        "term": "F26",
+        "subject": "AFM",
+        "catalog_number": "101",
+    }
+    headers = {"x-forwarded-for": "203.0.113.10"}
+
+    try:
+        for _ in range(rate_limiter.SEARCH_LIMIT):
+            response = client.post("/search", data=data, headers=headers)
+            assert response.status_code == 200
+
+        response = client.post("/search", data=data, headers=headers)
+    finally:
+        rate_limiter.search_attempts.clear()
+
+    assert response.status_code == 429
+    assert "Too many searches" in response.text
+    assert "seconds and try again" in response.text
+    assert int(response.headers["retry-after"]) > 0
+    assert fetch_calls == rate_limiter.SEARCH_LIMIT
 
 
 def test_default_term_code_uses_next_enrollment_term() -> None:

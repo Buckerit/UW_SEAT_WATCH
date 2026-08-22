@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import get_settings
 from app.services.audit import log_event
+from app.services.rate_limiter import search_retry_after_seconds
 from app.waterloo.client import (
     fetch_course_html,
     fetch_published_term_codes,
@@ -188,6 +189,37 @@ async def search_course(request: Request, level: str = Form(...), term: str = Fo
                 "errors": errors,
             },
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
+
+    retry_after_seconds = await search_retry_after_seconds(request)
+
+    if retry_after_seconds:
+        log_event(
+            "search",
+            "rate_limited",
+            level=normalized_level,
+            term=normalized_term,
+            subject=normalized_subject,
+            catalog=normalized_catalog_number,
+        )
+
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context={
+                "values": values,
+                "subject_codes": SUBJECT_CODES,
+                "errors": [
+                    (
+                        "Too many searches. Please wait about "
+                        f"{retry_after_seconds} seconds and try again."
+                    )
+                ],
+            },
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            headers={
+                "Retry-After": str(retry_after_seconds),
+            },
         )
 
     try:
