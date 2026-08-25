@@ -62,10 +62,12 @@ jobs:
 
           # Build first so migrations run with the same code being deployed.
           docker compose build app
-          docker compose run --rm -T app python -m alembic upgrade head
+          docker compose run --rm -T app python -m alembic upgrade head < /dev/null
+          echo "Restarting app container"
           docker compose up -d app
 
           # Confirm the container is serving before GitHub marks deploy green.
+          echo "Checking app health"
           curl -fsS http://127.0.0.1:8000/health
           trap - ERR
           DEPLOY
