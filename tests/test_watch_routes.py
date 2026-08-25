@@ -133,7 +133,10 @@ def test_verification_route_is_idempotent(route_db) -> None:
     assert watch.confirmed_at is not None
 
 
-def test_verification_queues_alert_for_already_open_watch(route_db) -> None:
+def test_verification_queues_alert_for_already_open_watch(
+    route_db,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     watch_id = add_watch(route_db, last_seen_open=True)
 
     with route_db() as db:
@@ -153,6 +156,12 @@ def test_verification_queues_alert_for_already_open_watch(route_db) -> None:
             )
         )
         db.commit()
+
+    monkeypatch.setattr(
+        watch_routes,
+        "send_pending_notifications",
+        lambda watch_id=None: 1,
+    )
 
     token = create_watch_verification_token(watch_id)
     client = TestClient(app)
