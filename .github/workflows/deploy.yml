@@ -1,0 +1,71 @@
+name: Continuous_Deployment
+
+on:
+  workflow_run:
+    workflows:
+      - Continuous_Integration
+    types:
+      - completed
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/uw-seat-watch
+          chmod 600 ~/.ssh/uw-seat-watch
+          ssh-keyscan -p "${{ secrets.AZURE_VM_PORT || '22' }}" "${{ secrets.AZURE_VM_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy on Azure VM
+        run: |
+          ssh \
+            -i ~/.ssh/uw-seat-watch \
+            -p "${{ secrets.AZURE_VM_PORT || '22' }}" \
+            "${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }}" << 'DEPLOY'
+          set -euo pipefail
+
+          # Use the existing checked-out repo on the VM.
+          DEPLOY_DIR="${{ secrets.AZURE_APP_DIR }}"
+          if [ -z "$DEPLOY_DIR" ]; then
+            DEPLOY_DIR="$HOME/UW_SEAT_WATCH"
+          fi
+          cd "$DEPLOY_DIR"
+
+          PREVIOUS_COMMIT="$(git rev-parse HEAD)"
+
+          rollback() {
+            trap - ERR
+            echo "Deploy failed. Rolling back to $PREVIOUS_COMMIT"
+            git checkout "$PREVIOUS_COMMIT"
+            docker compose build app
+            docker compose up -d app
+            curl -fsS http://127.0.0.1:8000/health
+          }
+
+          trap rollback ERR
+
+          # Fast-forward only so deploys never create surprise merge commits.
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+
+          # Build first so migrations run with the same code being deployed.
+          docker compose build app
+          docker compose run --rm app python -m alembic upgrade head
+          docker compose up -d app
+
+          # Confirm the container is serving before GitHub marks deploy green.
+          curl -fsS http://127.0.0.1:8000/health
+          trap - ERR
+          DEPLOY
