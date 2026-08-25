@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     email_backend: str = "console"
     brevo_api_key: str | None = None
     from_email: str = "UW Seat Watch <alerts@example.com>"
+    prg_secret_key: str = "local-prg-token-change-me"
 
     waterloo_schedule_url: str = (
         "https://classes.uwaterloo.ca/cgi-bin/cgiwrap/infocour/salook.pl"

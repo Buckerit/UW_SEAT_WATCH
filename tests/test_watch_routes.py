@@ -340,7 +340,7 @@ def test_production_watch_creation_does_not_show_verification_link(
     finally:
         get_settings.cache_clear()
 
-    assert response.status_code == 201
+    assert response.status_code == 200
     assert "Development verification link" not in response.text
     assert "verify?token=secret" not in response.text
 
@@ -975,7 +975,7 @@ def test_new_watch_can_be_created_after_stop_all(
             )
         ).all()
 
-    assert response.status_code == 201
+    assert response.status_code == 200
     assert len(watches) == 1
 
 
@@ -1050,7 +1050,7 @@ def test_same_watch_can_be_created_after_manage_remove(
             )
         ).all()
 
-    assert response.status_code == 201
+    assert response.status_code == 200
     assert len(watches) == 1
     assert watches[0].class_number == "3804"
 

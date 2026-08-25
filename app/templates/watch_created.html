@@ -17,7 +17,7 @@
 
     <link
         rel="stylesheet"
-        href="{{ url_for('static', path='/app.css') }}?v=20260820-mobile"
+        href="{{ url_for('static', path='/app.css') }}?v=20260825-delivery-note"
     >
 </head>
 
@@ -70,8 +70,8 @@
                 <p id="watch-disclaimer" class="disclaimer">
                     Check your inbox. The verification link is only sent
                     by email, and this watch stays inactive until you use
-                    that link. If you do not see it, check spam, junk,
-                    and Promotions.
+                    that link.
+                    Alerts can sometimes land in spam, junk, or Promotions.
                 </p>
 
                 {% if watch and not watch.active %}
@@ -123,7 +123,7 @@
                 document.querySelector("#watch-eyebrow").textContent = "Verification complete";
                 document.querySelector("#watch-title").textContent = "Watch activated";
                 document.querySelector("#watch-message").textContent = "Your watch is now active.";
-                document.querySelector("#watch-disclaimer").textContent = "UW Seat Watch will now check this section during scheduled polling periods.";
+                document.querySelector("#watch-disclaimer").textContent = "UW Seat Watch will now check this section during scheduled polling periods. Alerts can sometimes land in spam, junk, or Promotions.";
             }
 
             if (localStorage.getItem(watchVerifiedKey) === "true") {

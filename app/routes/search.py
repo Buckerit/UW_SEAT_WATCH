@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import date
 import re
-from fastapi import APIRouter, Form, Request, status
+from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -133,8 +133,14 @@ async def show_contact_page(request: Request) -> HTMLResponse:
         },
     )
 
-@router.post("/search", response_class=HTMLResponse)
-async def search_course(request: Request, level: str = Form(...), term: str = Form(""), subject: str = Form(...), catalog_number: str = Form(...)) -> HTMLResponse:
+@router.get("/search", response_class=HTMLResponse)
+async def search_course(
+    request: Request,
+    level: str = Query(...),
+    term: str = Query(""),
+    subject: str = Query(...),
+    catalog_number: str = Query(...),
+) -> HTMLResponse:
     normalized_level = level.strip().lower()
     normalized_term = normalize_friendly_term_code(term)
     normalized_subject = subject.strip().upper()

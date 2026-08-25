@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
+from app.routes.prg_gets import router as prg_gets_router
 from app.routes.search import router as search_router
 from app.routes.watches import router as watches_router
 from app.services.scheduler import create_scheduler
@@ -62,6 +63,7 @@ app.mount(
 
 app.include_router(search_router)
 app.include_router(watches_router)
+app.include_router(prg_gets_router)
 
 
 @app.get("/favicon.ico", include_in_schema=False)

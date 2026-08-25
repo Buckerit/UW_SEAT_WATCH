@@ -93,3 +93,9 @@ def test_modified_manage_request_token_is_invalid() -> None:
 
     with pytest.raises(tokens.VerificationTokenError):
         tokens.read_manage_request_token(token + "x")
+
+
+def test_watch_status_token_round_trip() -> None:
+    token = tokens.make_watch_status_token(789)
+
+    assert tokens.read_watch_status_token(token)["watch_id"] == 789

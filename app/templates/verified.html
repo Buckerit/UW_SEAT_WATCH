@@ -17,7 +17,7 @@
 
     <link
         rel="stylesheet"
-        href="{{ url_for('static', path='/app.css') }}?v=20260820-mobile"
+        href="{{ url_for('static', path='/app.css') }}?v=20260825-delivery-note"
     >
 </head>
 
@@ -61,7 +61,8 @@
                 {% if not already_verified %}
                     <p class="disclaimer">
                         UW Seat Watch will now check this section during
-                        scheduled polling periods.
+                        scheduled polling periods. Alerts can sometimes
+                        land in spam, junk, or Promotions.
                     </p>
                 {% endif %}
             {% else %}

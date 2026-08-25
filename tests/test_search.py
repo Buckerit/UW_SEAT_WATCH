@@ -42,9 +42,9 @@ def test_friendly_term_normalizes_lowercase_and_whitespace() -> None:
 def test_malformed_term_inputs_show_friendly_error(term: str) -> None:
     client = TestClient(app)
 
-    response = client.post(
+    response = client.get(
         "/search",
-        data={
+        params={
             "level": "under",
             "term": term,
             "subject": "AFM",
@@ -70,9 +70,9 @@ def test_syntactically_valid_unpublished_term_is_friendly(
 
     client = TestClient(app)
 
-    response = client.post(
+    response = client.get(
         "/search",
-        data={
+        params={
             "level": "under",
             "term": "F27",
             "subject": "AFM",
@@ -106,9 +106,9 @@ def test_published_term_nonexistent_course_is_friendly(
 
     client = TestClient(app)
 
-    response = client.post(
+    response = client.get(
         "/search",
-        data={
+        params={
             "level": "under",
             "term": "F26",
             "subject": "COMMST",
@@ -159,9 +159,9 @@ def test_valid_search_passes_canonical_term_to_waterloo_client(
 
     client = TestClient(app)
 
-    response = client.post(
+    response = client.get(
         "/search",
-        data={
+        params={
             "level": "under",
             "term": " f26 ",
             "subject": "AFM",
@@ -226,10 +226,10 @@ def test_search_rate_limit_blocks_before_waterloo_fetch(
 
     try:
         for _ in range(rate_limiter.SEARCH_LIMIT):
-            response = client.post("/search", data=data, headers=headers)
+            response = client.get("/search", params=data, headers=headers)
             assert response.status_code == 200
 
-        response = client.post("/search", data=data, headers=headers)
+        response = client.get("/search", params=data, headers=headers)
     finally:
         rate_limiter.search_attempts.clear()
 

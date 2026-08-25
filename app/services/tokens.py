@@ -5,6 +5,9 @@ from app.config import get_settings
 
 VERIFY_WATCH_SALT = "verify-watch-v1"
 UNSUBSCRIBE_WATCH_SALT = "unsubscribe-watch-v1"
+WATCH_STATUS_PRG_SALT = "watch-status-v1"
+MANAGE_PRG_SALT = "manage-prg-v1"
+RESEND_VERIFICATION_PRG_SALT = "resend-verification-prg-v1"
 MANAGE_WATCHES_SALT = "manage-watches-v1"
 MANAGE_REQUEST_SALT = "manage-request-v1"
 VERIFY_TOKEN_MAX_AGE_SECONDS = 3600  # 1 hour
@@ -24,6 +27,14 @@ def _serializer() -> URLSafeTimedSerializer:
 
     return URLSafeTimedSerializer(
         secret_key=settings.secret_key,
+    )
+
+
+def _prg_serializer() -> URLSafeTimedSerializer:
+    settings = get_settings()
+
+    return URLSafeTimedSerializer(
+        secret_key=settings.prg_secret_key,
     )
 
 
@@ -107,11 +118,7 @@ def read_watch_unsubscribe_token(token: str) -> int:
     return watch_id
 
 
-def create_manage_watches_token(
-    *,
-    subscriber_id: int,
-    email: str,
-) -> str:
+def create_manage_watches_token(*, subscriber_id: int, email: str) -> str:
     return _serializer().dumps(
         {
             "purpose": "manage_watches",
@@ -197,3 +204,125 @@ def read_manage_request_token(token: str) -> str:
         )
 
     return email
+
+
+def make_watch_status_token(
+    watch_id: int,
+    *,
+    message: str = (
+        "The watch was saved. It is currently pending email verification."
+    ),
+    resend_message: str | None = None,
+    status_code: int = 200,
+) -> str:
+    return _prg_serializer().dumps(
+        {
+            "purpose": "watch_status",
+            "watch_id": watch_id,
+            "message": message,
+            "resend_message": resend_message,
+            "status_code": status_code,
+        },
+        salt=WATCH_STATUS_PRG_SALT,
+    )
+
+
+def read_watch_status_token(token: str) -> dict[str, object]:
+    try:
+        data = _prg_serializer().loads(token, salt=WATCH_STATUS_PRG_SALT)
+    except BadSignature as exc:
+        raise VerificationTokenError("This watch status link is invalid.") from exc
+
+    if data.get("purpose") != "watch_status":
+        raise VerificationTokenError("This watch status link has the wrong purpose.")
+
+    watch_id = data.get("watch_id")
+
+    if not isinstance(watch_id, int):
+        raise VerificationTokenError(
+            "This watch status link is malformed."
+        )
+
+    return data
+
+
+def create_manage_prg_token(
+    *,
+    resend_token: str,
+    resend_message: str | None = None,
+    status_code: int = 200,
+) -> str:
+    return _prg_serializer().dumps(
+        {
+            "purpose": "manage_prg",
+            "resend_token": resend_token,
+            "resend_message": resend_message,
+            "status_code": status_code,
+        },
+        salt=MANAGE_PRG_SALT,
+    )
+
+
+def read_manage_prg_token(token: str) -> dict[str, object]:
+    try:
+        data = _prg_serializer().loads(token, salt=MANAGE_PRG_SALT)
+    except BadSignature as exc:
+        raise VerificationTokenError("This manage status link is invalid.") from exc
+
+    if data.get("purpose") != "manage_prg":
+        raise VerificationTokenError("This manage status link has the wrong purpose.")
+
+    resend_token = data.get("resend_token")
+
+    if not isinstance(resend_token, str):
+        raise VerificationTokenError(
+            "This manage status link is malformed."
+        )
+
+    return data
+
+
+def create_resend_verification_prg_token(
+    *,
+    watch_id: int,
+    message: str,
+    resend_message: str | None = None,
+    status_code: int = 200,
+) -> str:
+    return _prg_serializer().dumps(
+        {
+            "purpose": "resend_verification_prg",
+            "watch_id": watch_id,
+            "message": message,
+            "resend_message": resend_message,
+            "status_code": status_code,
+        },
+        salt=RESEND_VERIFICATION_PRG_SALT,
+    )
+
+
+def read_resend_verification_prg_token(token: str) -> dict[str, object]:
+    try:
+        data = _prg_serializer().loads(
+            token,
+            salt=RESEND_VERIFICATION_PRG_SALT,
+        )
+    except BadSignature as exc:
+        raise VerificationTokenError(
+            "This verification status link is invalid."
+        ) from exc
+
+    if data.get("purpose") != "resend_verification_prg":
+        raise VerificationTokenError(
+            "This verification status link has the wrong purpose."
+        )
+
+    watch_id = data.get("watch_id")
+
+    if not isinstance(watch_id, int):
+        raise VerificationTokenError(
+            "This verification status link is malformed."
+        )
+
+    return data
+    
