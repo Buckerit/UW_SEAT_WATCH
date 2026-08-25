@@ -51,7 +51,6 @@ def cleanup_ended_term_watches(
                 deleted_count += 1
 
         db.commit() 
-        
 
     return deleted_count
 
