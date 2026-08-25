@@ -306,6 +306,7 @@ def test_production_watch_creation_does_not_show_verification_link(
         return "https://example.com/verify?token=secret"
 
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("SECRET_KEY", "test-production-secret")
     get_settings.cache_clear()
     monkeypatch.setattr(
         watch_routes,
