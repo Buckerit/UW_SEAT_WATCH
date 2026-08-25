@@ -50,7 +50,8 @@ def cleanup_ended_term_watches(
                 db.delete(watch)
                 deleted_count += 1
 
-        db.commit()
+        db.commit() 
+        
 
     return deleted_count
 
