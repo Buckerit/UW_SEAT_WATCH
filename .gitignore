@@ -13,6 +13,7 @@ htmlcov/
 .vscode/
 
 data/
+/tls/
 *.db
 *.db-wal
 *.db-shm

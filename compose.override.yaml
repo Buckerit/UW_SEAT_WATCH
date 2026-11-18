@@ -1,0 +1,12 @@
+services:
+  app:
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/waterloo-ca-bundle.pem
+      WATERLOO_CA_BUNDLE: /etc/ssl/certs/waterloo-ca-bundle.pem
+    volumes:
+      - type: bind
+        source: ./tls/waterloo-ca-bundle.pem
+        target: /etc/ssl/certs/waterloo-ca-bundle.pem
+        read_only: true
+        bind:
+          create_host_path: false

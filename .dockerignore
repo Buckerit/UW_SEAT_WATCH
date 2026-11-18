@@ -6,3 +6,4 @@
 .pytest_cache
 uw_seat_watch.db
 data
+tls/
